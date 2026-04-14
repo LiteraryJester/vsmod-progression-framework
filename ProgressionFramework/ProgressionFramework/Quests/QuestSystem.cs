@@ -217,7 +217,7 @@ public class QuestSystem : ModSystem
         }
         catch (Exception e)
         {
-            sapi.Logger.Error("[Quest] Failed to load server quest state: {0}", e.Message);
+            sapi.Logger.Error("[Quest] Failed to load server quest state: {0}\n{1}", e.Message, e.StackTrace);
         }
     }
 
@@ -594,8 +594,8 @@ public class QuestSystem : ModSystem
             }
             catch (Exception e)
             {
-                api?.Logger.Error("[Quest] Failed to apply reward {0} for quest {1}: {2}",
-                    reward.Type, quest.Code, e.Message);
+                api?.Logger.Error("[Quest] Failed to apply reward {0} for quest {1}: {2}\n{3}",
+                    reward.Type, quest.Code, e.Message, e.StackTrace);
             }
         }
     }
