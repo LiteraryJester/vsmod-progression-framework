@@ -724,6 +724,12 @@ public class QuestSystem : ModSystem
         var varSys = api?.ModLoader.GetModSystem<VariablesModSystem>();
         if (varSys == null) return;
 
+        // VarData / GlobalVariables may not be initialised yet at SaveGameLoaded
+        // time — base-game VariablesModSystem populates them during its own start-up.
+        // Silently skip sync in that window; state will be re-pushed when quests
+        // next mutate (AssignQuest, CompleteObjective, etc.) after join.
+        if (varSys.VarData == null || varSys.VarData.GlobalVariables == null) return;
+
         var node = GetQuestNode(player, quest.Code, create: false);
         string status = node?.GetString("status", "unavailable") ?? "unavailable";
 
@@ -776,6 +782,7 @@ public class QuestSystem : ModSystem
     private void BroadcastVarData(VariablesModSystem varSys, Quest quest, IServerPlayer? player)
     {
         if (sapi == null) return;
+        if (varSys.VarData == null) return;  // same reason as in SyncFlat
         var channel = sapi.Network.GetChannel("variable");
         if (channel == null) return;
 
