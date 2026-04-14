@@ -23,7 +23,24 @@ public class TrainingSystem : ModSystem
 
     private ICoreServerAPI? sapi;
 
+    private readonly Dictionary<string, IXpSourceHandler> xpHandlers = new(StringComparer.OrdinalIgnoreCase);
+
+    public void RegisterXpSourceKind(string kind, IXpSourceHandler handler)
+    {
+        if (xpHandlers.ContainsKey(kind))
+            sapi?.Logger.Warning("[Training] XP source kind '{0}' re-registered; overwriting.", kind);
+        xpHandlers[kind] = handler;
+    }
+
     public override bool ShouldLoad(EnumAppSide side) => true;
+
+    public override void Start(ICoreAPI api)
+    {
+        base.Start(api);
+        RegisterXpSourceKind("craft", new CraftXpHandler());
+        RegisterXpSourceKind("dialogue", new DialogueXpHandler());
+        RegisterXpSourceKind("book", new BookXpHandler());
+    }
 
     public override void StartServerSide(ICoreServerAPI api)
     {
@@ -171,43 +188,59 @@ public class TrainingSystem : ModSystem
     }
 
     /// <summary>
-    /// Find XP sources matching a crafted recipe output code.
-    /// Supports wildcard patterns like "game:pie-*".
+    /// Enumerates every XP source whose registered handler matches
+    /// <paramref name="eventData"/> for the given source kind.
     /// </summary>
-    public IEnumerable<TrainingXpSource> GetCraftXpSources(string outputCode)
+    public IEnumerable<TrainingXpSource> FindMatchingSources(string kind, object eventData)
     {
+        if (!xpHandlers.TryGetValue(kind, out var handler))
+            yield break;
+
         foreach (var source in XpSources)
         {
-            if (source.Type != "craft" || source.Recipe == null) continue;
-
-            if (source.Recipe.Contains('*'))
-            {
-                string pattern = "^" + Regex.Escape(source.Recipe).Replace("\\*", ".*") + "$";
-                if (Regex.IsMatch(outputCode, pattern, RegexOptions.IgnoreCase))
-                    yield return source;
-            }
-            else if (source.Recipe.Equals(outputCode, StringComparison.OrdinalIgnoreCase))
-            {
-                yield return source;
-            }
+            if (!source.Type.Equals(kind, StringComparison.OrdinalIgnoreCase)) continue;
+            if (handler.Matches(source, eventData)) yield return source;
         }
     }
 
-    /// <summary>
-    /// Find XP sources matching a dialogue trigger name.
-    /// </summary>
-    public TrainingXpSource? GetDialogueXpSource(string triggerName)
-    {
-        return XpSources.FirstOrDefault(s =>
-            s.Type == "dialogue" && s.Trigger == triggerName);
-    }
+    public IEnumerable<TrainingXpSource> GetCraftXpSources(string outputCode) => FindMatchingSources("craft", outputCode);
+    public TrainingXpSource? GetDialogueXpSource(string triggerName) => FindMatchingSources("dialogue", triggerName).FirstOrDefault();
+    public TrainingXpSource? GetBookXpSource(string itemCode) => FindMatchingSources("book", itemCode).FirstOrDefault();
+}
 
-    /// <summary>
-    /// Find XP sources matching a book item code.
-    /// </summary>
-    public TrainingXpSource? GetBookXpSource(string itemCode)
+internal sealed class CraftXpHandler : IXpSourceHandler
+{
+    public bool Matches(TrainingXpSource source, object eventData)
     {
-        return XpSources.FirstOrDefault(s =>
-            s.Type == "book" && s.Item == itemCode);
+        if (eventData is not string outputCode) return false;
+        if (source.Recipe == null) return false;
+
+        if (source.Recipe.Contains('*'))
+        {
+            string pattern = "^" + System.Text.RegularExpressions.Regex.Escape(source.Recipe).Replace("\\*", ".*") + "$";
+            return System.Text.RegularExpressions.Regex.IsMatch(outputCode, pattern,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        }
+        return source.Recipe.Equals(outputCode, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+internal sealed class DialogueXpHandler : IXpSourceHandler
+{
+    public bool Matches(TrainingXpSource source, object eventData)
+    {
+        return eventData is string trigger
+            && !string.IsNullOrEmpty(source.Trigger)
+            && source.Trigger.Equals(trigger, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+internal sealed class BookXpHandler : IXpSourceHandler
+{
+    public bool Matches(TrainingXpSource source, object eventData)
+    {
+        return eventData is string itemCode
+            && !string.IsNullOrEmpty(source.Item)
+            && source.Item.Equals(itemCode, StringComparison.OrdinalIgnoreCase);
     }
 }
