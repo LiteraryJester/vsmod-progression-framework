@@ -1,29 +1,44 @@
-﻿using Vintagestory.API.Client;
+using System.Text;
+using HarmonyLib;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.Server;
+using ProgressionFramework.Training;
+using ProgressionFramework.Quests;
+using ProgressionFramework.Trading;
 
 namespace ProgressionFramework
 {
     public class ProgressionFrameworkModSystem : ModSystem
     {
+        private const string HarmonyId = "progressionframework";
+        private Harmony? harmony;
+        private GuiDialogTrainingLedger? trainingDialog;
 
-        // Called on server and client
-        // Useful for registering block/entity classes on both sides
         public override void Start(ICoreAPI api)
         {
-            Mod.Logger.Notification("Hello from template mod: " + api.Side);
+            api.RegisterItemClass("ItemTrainingBook", typeof(ItemTrainingBook));
+            api.RegisterEntity("EntityEvolvingTrader", typeof(EntityEvolvingTrader));
+
+            harmony = new Harmony(HarmonyId);
+            harmony.PatchAll(typeof(ProgressionFrameworkModSystem).Assembly);
         }
 
-        public override void StartServerSide(ICoreServerAPI api)
+        public override void Dispose()
         {
-            Mod.Logger.Notification("Hello from template mod server side: " + Lang.Get("progressionframework:hello"));
+            harmony?.UnpatchAll(HarmonyId);
+            base.Dispose();
         }
 
         public override void StartClientSide(ICoreClientAPI api)
         {
-            Mod.Logger.Notification("Hello from template mod client side: " + Lang.Get("progressionframework:hello"));
-        }
+            api.Input.RegisterHotKey("progressionframeworktrainingledger",
+                Lang.Get("progressionframework:training-ledger-title"), GlKeys.L,
+                HotkeyType.GUIOrOtherControls);
 
+            var trainingSystem = api.ModLoader.GetModSystem<TrainingSystem>();
+            trainingDialog = new GuiDialogTrainingLedger(api, trainingSystem);
+        }
     }
 }
