@@ -108,7 +108,7 @@ When referencing base-game or base-survival assets from mod JSON, always use the
 
 - Correct: `"game:block/wood/debarked/{material}"`, `"game:item/resource/rope"`, `"game:log-placed-{material}-ud"`
 - The framework's own assets use `progressionframework:` prefix (or no prefix within the mod's own namespace)
-- Other mod prefixes: `seafarer:` (Salt and Sand content), `expandedfoods:`, `aculinaryartillery:`, etc. — always with `dependsOn` when patching them
+- Other mod prefixes: `seafarer:` (Seafarer content), `expandedfoods:`, `aculinaryartillery:`, etc. — always with `dependsOn` when patching them
 
 ### JSON Format
 
@@ -123,7 +123,7 @@ VS uses JSON5 (relaxed JSON) for asset files — trailing commas, unquoted keys,
 
 ### Harmony Patches
 
-- Framework Harmony id is `"progressionframework"` — distinct from salt-and-sand's `"seafarer"` so they don't collide when loaded together
+- Framework Harmony id is `"progressionframework"` — distinct from seafarer's `"seafarer"` so they don't collide when loaded together
 - `PatchAll(typeof(ProgressionFrameworkModSystem).Assembly)` scans this assembly only
 
 ## Reference Resources (local paths)
@@ -146,7 +146,8 @@ When designing mod code or understanding existing game behavior, consult:
 
 ## Consumers
 
-- **Salt and Sand** (`vsmod-salt-and-sand`, modid `seafarer`) — hard dependency in its modinfo. Its content JSONs (`assets/seafarer/config/quests/`, `config/training/`, `config/tradelists/`, `config/dialogue/`) are discovered automatically.
+- **Seafarer** (`vsmod-seafarer`, modid `seafarer`) — hard dependency in its modinfo. Its content JSONs (`assets/seafarer/config/quests/`, `config/training/`, `config/tradelists/`, `config/dialogue/`) are discovered automatically. Repo path: `D:\Development\vs\vsmod-seafarer\` (WSL: `/mnt/d/Development/vs/vsmod-seafarer/`).
+- Archived: `vsmod-salt-and-sand` — Seafarer's previous home, kept on disk as a historical reference only.
 
 ## Known Follow-ups
 
