@@ -139,14 +139,37 @@ public class QuestSystem : ModSystem
 
     /// <summary>
     /// Resolves a quest code that may or may not carry a mod prefix. Bare codes
-    /// are resolved against our own mod ID, so dialog triggers in seafarer files
-    /// can reference quests by their short name.
+    /// are looked up across all loaded mod domains in <see cref="QuestsByCode"/>;
+    /// if exactly one match is found it is returned, otherwise the bare code is
+    /// returned unchanged (the caller's lookup will fail gracefully).
     /// </summary>
     private string ResolveCode(string code)
     {
         if (string.IsNullOrEmpty(code)) return code;
         if (code.Contains(':')) return code;
-        return Mod.Info.ModID + ":" + code;
+
+        // Bare code — try to disambiguate across loaded mod domains.
+        // Matches "<anyDomain>:<code>" exactly (not suffix-wise, to avoid false
+        // positives like "foo-bar" matching "bar").
+        string suffix = ":" + code;
+        string? match = null;
+        foreach (var key in QuestsByCode.Keys)
+        {
+            if (!key.EndsWith(suffix, StringComparison.Ordinal)) continue;
+            // Ensure the part before suffix has no colon (i.e., key is exactly "<domain>:<code>")
+            int boundary = key.Length - suffix.Length;
+            if (boundary < 1) continue;
+            if (key.IndexOf(':', 0, boundary) >= 0) continue;
+
+            if (match != null)
+            {
+                // Ambiguous — two different domains define the same bare code.
+                api?.Logger.Warning("[Quest] Bare code '{0}' is ambiguous across domains; pass a fully-qualified code.", code);
+                return code;
+            }
+            match = key;
+        }
+        return match ?? code;
     }
 
     /// <summary>
