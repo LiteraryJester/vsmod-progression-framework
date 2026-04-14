@@ -38,51 +38,58 @@ public class TrainingSystem : ModSystem
 
     private void LoadConfigs(ICoreAPI api)
     {
-        // Load professions
-        var professionsAsset = api.Assets.TryGet(
-            new AssetLocation("seafarer:config/professions.json"));
-        if (professionsAsset != null)
-        {
-            try
-            {
-                var token = JToken.Parse(professionsAsset.ToText());
-                Professions = token.ToObject<List<Profession>>() ?? new();
-            }
-            catch (Exception e)
-            {
-                api.Logger.Error("[Training] Failed to load professions.json: {0}", e.Message);
-            }
-        }
+        Professions = new List<Profession>();
+        XpSources = new List<TrainingXpSource>();
+        Config = new TrainingConfig();
 
-        // Load XP sources
-        var xpAsset = api.Assets.TryGet(
-            new AssetLocation("seafarer:config/training-xp.json"));
-        if (xpAsset != null)
+        // Scan every mod domain for config/training/*.json.
+        // Convention:
+        //   <domain>:config/training/professions.json   -> appended to Professions
+        //   <domain>:config/training/xp.json            -> appended to XpSources
+        //   <domain>:config/training/config.json        -> LAST writer wins (global toggles)
+        //   <domain>:config/training/*.json (any other) -> inspected by top-level key:
+        //       { "professions": [...] } / { "xpSources": [...] } / { "config": {...} }
+        //       or a bare array (treated as XP sources for back-compat)
+        var assets = api.Assets.GetMany("config/training/");
+        foreach (var asset in assets)
         {
             try
             {
-                var token = JToken.Parse(xpAsset.ToText());
-                XpSources = token.ToObject<List<TrainingXpSource>>() ?? new();
-            }
-            catch (Exception e)
-            {
-                api.Logger.Error("[Training] Failed to load training-xp.json: {0}", e.Message);
-            }
-        }
+                var token = JToken.Parse(asset.ToText());
+                string fileName = asset.Location.Path.Split('/').Last();
 
-        // Load config
-        var configAsset = api.Assets.TryGet(
-            new AssetLocation("seafarer:config/training-config.json"));
-        if (configAsset != null)
-        {
-            try
-            {
-                var token = JToken.Parse(configAsset.ToText());
-                Config = token.ToObject<TrainingConfig>() ?? new();
+                if (token is JArray arr)
+                {
+                    // Bare array — treat filename as hint
+                    if (fileName.Equals("professions.json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Professions.AddRange(arr.ToObject<List<Profession>>() ?? new());
+                    }
+                    else
+                    {
+                        // Default bare-array treatment: XP sources
+                        XpSources.AddRange(arr.ToObject<List<TrainingXpSource>>() ?? new());
+                    }
+                }
+                else if (token is JObject obj)
+                {
+                    if (obj["professions"] is JArray profs)
+                        Professions.AddRange(profs.ToObject<List<Profession>>() ?? new());
+                    if (obj["xpSources"] is JArray xps)
+                        XpSources.AddRange(xps.ToObject<List<TrainingXpSource>>() ?? new());
+                    if (obj["config"] is JObject cfg)
+                        Config = cfg.ToObject<TrainingConfig>() ?? Config;
+                    // Legacy: filename "config.json" with top-level TrainingConfig shape
+                    if (fileName.Equals("config.json", StringComparison.OrdinalIgnoreCase)
+                        && obj["showAllTrainings"] != null)
+                    {
+                        Config = obj.ToObject<TrainingConfig>() ?? Config;
+                    }
+                }
             }
             catch (Exception e)
             {
-                api.Logger.Error("[Training] Failed to load training-config.json: {0}", e.Message);
+                api.Logger.Error("[Training] Failed to load {0}: {1}", asset.Location, e.Message);
             }
         }
 
@@ -98,8 +105,8 @@ public class TrainingSystem : ModSystem
             }
         }
 
-        api.Logger.Notification("[Training] Loaded {0} professions, {1} trainings, {2} XP sources",
-            Professions.Count, TrainingsByCode.Count, XpSources.Count);
+        api.Logger.Notification("[Training] Loaded {0} professions, {1} trainings, {2} XP sources from {3} file(s)",
+            Professions.Count, TrainingsByCode.Count, XpSources.Count, assets.Count());
     }
 
     /// <summary>
