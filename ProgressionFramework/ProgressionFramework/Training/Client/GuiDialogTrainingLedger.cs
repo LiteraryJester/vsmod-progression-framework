@@ -12,7 +12,7 @@ public class GuiDialogTrainingLedger : GuiDialog
     private readonly TrainingSystem system;
     private readonly Dictionary<string, float[]> barValues = new();
 
-    public override string ToggleKeyCombinationCode => "seafarertrainingledger";
+    public override string ToggleKeyCombinationCode => "progressionframeworktrainingledger";
     public override bool PrefersUngrabbedMouse => false;
 
     public GuiDialogTrainingLedger(ICoreClientAPI capi, TrainingSystem system) : base(capi)
@@ -75,9 +75,9 @@ public class GuiDialogTrainingLedger : GuiDialog
             .WithAlignment(EnumDialogArea.CenterMiddle)
             .WithFixedAlignmentOffset(0, 0);
 
-        var composer = capi.Gui.CreateCompo("seafarertrainingledger", dialogBounds)
+        var composer = capi.Gui.CreateCompo("progressionframeworktrainingledger", dialogBounds)
             .AddShadedDialogBG(bgBounds)
-            .AddDialogTitleBar(Lang.Get("seafarer:training-ledger-title"), () => TryClose())
+            .AddDialogTitleBar(Lang.Get("progressionframework:training-ledger-title"), () => TryClose())
             .BeginChildElements(bgBounds);
 
         double y = 0;
@@ -129,7 +129,7 @@ public class GuiDialogTrainingLedger : GuiDialog
                 if (showNumbers)
                 {
                     string xpText = completed
-                        ? Lang.Get("seafarer:training-complete")
+                        ? Lang.Get("progressionframework:training-complete")
                         : $"{(int)xp} / {(int)maxXp}";
                     var xpFont = CairoFont.WhiteDetailText().WithFontSize(10);
                     var xpBounds = ElementBounds.Fixed(12, y - 1, width - 24, barH + 2);

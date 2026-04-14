@@ -32,7 +32,7 @@ namespace ProgressionFramework.Training
             var source = system.GetBookXpSource(Code.ToString());
             if (source == null)
             {
-                player.SendIngameError("notrainingbook", Lang.Get("seafarer:trainingbook-nosource"));
+                player.SendIngameError("notrainingbook", Lang.Get("progressionframework:trainingbook-nosource"));
                 return;
             }
 
@@ -56,7 +56,7 @@ namespace ProgressionFramework.Training
             {
                 new WorldInteraction
                 {
-                    ActionLangCode = "seafarer:heldhelp-readtolearn",
+                    ActionLangCode = "progressionframework:heldhelp-readtolearn",
                     MouseButton = EnumMouseButton.Right
                 }
             }.Append(base.GetHeldInteractionHelp(inSlot));

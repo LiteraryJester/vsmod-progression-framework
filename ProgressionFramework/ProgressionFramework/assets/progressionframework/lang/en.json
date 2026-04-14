@@ -1,2 +1,7 @@
 {
+    "training-ledger-title": "Training Ledger",
+    "training-levelup": "You reached: {0}",
+    "training-complete": "(Max level)",
+    "trainingbook-nosource": "This book has no registered training.",
+    "heldhelp-readtolearn": "Read to learn"
 }

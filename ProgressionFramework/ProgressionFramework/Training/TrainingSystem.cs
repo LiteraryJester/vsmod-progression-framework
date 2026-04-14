@@ -12,7 +12,7 @@ namespace ProgressionFramework.Training;
 
 public class TrainingSystem : ModSystem
 {
-    public const string TrainingTreeKey = "seafarer-training";
+    public const string TrainingTreeKey = "progressionframework:training";
 
     public List<Profession> Professions { get; private set; } = new();
     public List<TrainingXpSource> XpSources { get; private set; } = new();
@@ -139,7 +139,7 @@ public class TrainingSystem : ModSystem
             string title = Lang.Get("seafarer:training-title-" + nextLevel.Trait,
                 nextLevel.Title);
             sapi?.SendMessage(player, 0,
-                Lang.Get("seafarer:training-levelup", title),
+                Lang.Get("progressionframework:training-levelup", title),
                 EnumChatType.Notification);
 
             sapi?.Logger.Notification("[Training] {0} reached {1} level {2} ({3})",
