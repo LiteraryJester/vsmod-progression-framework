@@ -28,24 +28,29 @@ ProgressionFramework/
 ├── build.ps1 / build.sh                       # Cake entry points
 ├── ZZCakeBuild/                               # Cake build system
 ├── docs/superpowers/
-│   ├── specs/ … -extraction-design.md         # extraction spec
-│   └── plans/ … -extraction.md                # extraction plan (reference)
+│   ├── specs/ … -extraction-design.md         # extraction spec (historical)
+│   ├── specs/ … -ledger-gui-design.md         # tabbed ledger GUI spec
+│   ├── plans/ … -extraction.md                # extraction plan (historical)
+│   └── plans/ … -ledger-gui.md                # tabbed ledger GUI plan
 └── ProgressionFramework/                      # C# project
     ├── ProgressionFramework.csproj
-    ├── ProgressionFrameworkModSystem.cs       # entry point (class registrations, Harmony)
+    ├── ProgressionFrameworkModSystem.cs       # entry point (class registrations, Harmony, ledger dialog)
     ├── modinfo.json
+    ├── Client/
+    │   ├── GuiDialogLedger.cs                 # tabbed L-key dialog (Training + Quest Log)
+    │   └── LedgerQuestLogTab.cs               # quest log tab compose helper
     ├── Training/
     │   ├── TrainingSystem.cs                  # ModSystem — professions, XP sources, trait grants
     │   ├── TrainingData.cs                    # Profession, Training, TrainingLevel, TrainingXpSource
     │   ├── ItemTrainingBook.cs                # Item class for "read to learn" books
     │   ├── CraftingXpPatch.cs                 # Harmony patch: grants craft XP on GridRecipe.ConsumeInput
-    │   ├── IXpSourceHandler.cs                # public extension interface
-    │   └── Client/GuiDialogTrainingLedger.cs  # client-side ledger GUI
+    │   └── IXpSourceHandler.cs                # public extension interface
     ├── Quests/
-    │   ├── QuestSystem.cs                     # ModSystem — loads JSON quests, tracks state
+    │   ├── QuestSystem.cs                     # ModSystem — loads JSON quests, tracks state, server-quest sync
     │   ├── Quest.cs                           # Quest / QuestObjective / QuestReward / enums
     │   ├── QuestDialogTriggers.cs             # hooks dialogue-triggered quest state changes
     │   ├── QuestRewardHandler.cs              # built-in reward handlers + dispatcher helpers
+    │   ├── ServerQuestSyncPackets.cs          # protobuf DTOs for server→client quest state sync
     │   ├── IQuestObjectiveHandler.cs          # public extension interface
     │   └── IQuestRewardHandler.cs             # public extension interface
     ├── Trading/
