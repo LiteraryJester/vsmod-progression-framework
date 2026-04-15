@@ -94,7 +94,7 @@ Built-in XP source kinds: `craft`, `dialogue`, `book`.
 - `SaveGame["progressionframework:serverquests"]` — server-scoped quest state
 - `WatchedAttributes["progressionframework:training"]` — per-player training XP + levels
 
-Registered identifiers that stay content-stable: entity class name `EntityEvolvingTrader`, item class name `ItemTrainingBook`, Harmony id `progressionframework`, hotkey id `progressionframeworktrainingledger`.
+Registered identifiers that stay content-stable: entity class name `EntityEvolvingTrader`, item class name `ItemTrainingBook`, Harmony id `progressionframework`, hotkey id `progressionframeworkledger`, network channel `progressionframework:questsync`.
 
 ### Quest code resolution
 
@@ -151,4 +151,4 @@ When designing mod code or understanding existing game behavior, consult:
 
 ## Known Follow-ups
 
-- Training ledger `L` hotkey may not open the GUI reliably — pre-existing behavior; the hotkey registration path in `StartClientSide` may need the dialog to be registered with the client API's dialog system, not just instantiated. Investigate `GuiDialog` base-class registration patterns in `VintagestoryAPI`.
+- Server-scope quest state is synced to clients via the `progressionframework:questsync` network channel but is not manually validated in-game yet — Seafarer currently ships no server-scope quests. Validate once a consumer mod adds one.
