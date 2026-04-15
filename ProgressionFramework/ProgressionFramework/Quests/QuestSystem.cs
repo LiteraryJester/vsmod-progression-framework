@@ -632,54 +632,79 @@ public class QuestSystem : ModSystem
         var quest = GetQuest(questCode);
         if (quest == null) return;
         var objective = quest.Objectives.Find(o => o.Code == objectiveCode);
-        if (objective == null || !objective.Type.Equals("delivery", StringComparison.OrdinalIgnoreCase)) return;
+        if (objective == null) return;
 
         var varSys = api?.ModLoader.GetModSystem<VariablesModSystem>();
         if (varSys == null) return;
 
-        int currentProgress = ReadFlatInt(varSys, playerEntity, quest,
-            $"quest-{CodeToVarName(quest.Code)}-{objectiveCode}-progress");
-        int remainingNeeded = objective.Required - currentProgress;
-        if (remainingNeeded <= 0) return;
+        string progressVar = $"quest-{CodeToVarName(quest.Code)}-{objectiveCode}-progress";
+        int currentProgress = ReadFlatInt(varSys, playerEntity, quest, progressVar);
+        int newProgress = currentProgress;
 
-        int maxTurnIns = int.MaxValue;
-        foreach (var req in objective.Items)
+        if (objective.Type.Equals("delivery", StringComparison.OrdinalIgnoreCase))
         {
-            if (req.Quantity <= 0) continue;
-            int have = CountInInventoryEntity(playerEntity, req.Item);
-            int canDo = have / req.Quantity;
-            if (canDo < maxTurnIns) maxTurnIns = canDo;
-        }
-        int turnIns = Math.Min(maxTurnIns, remainingNeeded);
-        if (turnIns <= 0) return;
+            int remainingNeeded = objective.Required - currentProgress;
+            if (remainingNeeded <= 0) return;
 
-        int newProgress = currentProgress + turnIns;
+            int maxTurnIns = int.MaxValue;
+            foreach (var req in objective.Items)
+            {
+                if (req.Quantity <= 0) continue;
+                int have = CountInInventoryEntity(playerEntity, req.Item);
+                int canDo = have / req.Quantity;
+                if (canDo < maxTurnIns) maxTurnIns = canDo;
+            }
+            int turnIns = Math.Min(maxTurnIns, remainingNeeded);
+            if (turnIns <= 0) return;
+
+            newProgress = currentProgress + turnIns;
+        }
+        else if (objective.Type.Equals("kill", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrEmpty(objective.Pattern)) return;
+
+            // Read server-synced global counter and this quest's per-player baseline
+            // out of the client's VarData mirror.
+            string? globalCountStr = varSys.GetVariable(
+                EnumActivityVariableScope.Global, $"pf:killcount:{objective.Pattern}", null);
+            int globalCount = int.TryParse(globalCountStr, out int gc) ? gc : 0;
+
+            string baselineVar = $"quest-{CodeToVarName(quest.Code)}-{objectiveCode}-baseline";
+            int baseline = ReadFlatInt(varSys, playerEntity, quest, baselineVar);
+
+            newProgress = Math.Max(0, globalCount - baseline);
+            if (newProgress == currentProgress) return;
+        }
+        else
+        {
+            return;
+        }
+
         bool objectiveDone = newProgress >= objective.Required;
+        WriteFlatVar(varSys, playerEntity, quest, progressVar, newProgress.ToString());
+
+        if (!objectiveDone) return;
 
         WriteFlatVar(varSys, playerEntity, quest,
-            $"quest-{CodeToVarName(quest.Code)}-{objectiveCode}-progress", newProgress.ToString());
-        if (objectiveDone)
+            $"quest-{CodeToVarName(quest.Code)}-{objectiveCode}-status", "completed");
+
+        // Best-effort: if enough objectives are now complete in the client's mirror
+        // view, flip the quest status. The server will do the same and broadcast;
+        // if they disagree, the broadcast wins.
+        int requiredObjectives = quest.RequiredObjectiveCount ?? quest.Objectives.Count;
+        int doneCount = 0;
+        foreach (var obj in quest.Objectives)
+        {
+            string objStatusVar = $"quest-{CodeToVarName(quest.Code)}-{obj.Code}-status";
+            string localStatus = obj.Code == objectiveCode
+                ? "completed"
+                : ReadFlatString(varSys, playerEntity, quest, objStatusVar);
+            if (localStatus == "completed") doneCount++;
+        }
+        if (doneCount >= requiredObjectives)
         {
             WriteFlatVar(varSys, playerEntity, quest,
-                $"quest-{CodeToVarName(quest.Code)}-{objectiveCode}-status", "completed");
-
-            // Best-effort: if every objective is now complete in the client's mirror
-            // view, flip the quest status. The server will do the same and broadcast;
-            // if they disagree, the broadcast wins.
-            bool allDone = true;
-            foreach (var obj in quest.Objectives)
-            {
-                string objStatusVar = $"quest-{CodeToVarName(quest.Code)}-{obj.Code}-status";
-                string localStatus = obj.Code == objectiveCode
-                    ? "completed"
-                    : ReadFlatString(varSys, playerEntity, quest, objStatusVar);
-                if (localStatus != "completed") { allDone = false; break; }
-            }
-            if (allDone)
-            {
-                WriteFlatVar(varSys, playerEntity, quest,
-                    $"quest-{CodeToVarName(quest.Code)}-status", "completed");
-            }
+                $"quest-{CodeToVarName(quest.Code)}-status", "completed");
         }
     }
 
@@ -936,16 +961,19 @@ public class QuestSystem : ModSystem
 
                     string objStatus = objTree.GetString("status", "pending");
                     string progress = objTree.GetInt("progress").ToString();
+                    string baseline = objTree.GetInt("baseline").ToString();
 
                     if (quest.Scope == QuestScope.Server)
                     {
                         varSys.VarData.GlobalVariables[$"quest-{CodeToVarName(quest.Code)}-{obj.Code}-status"] = objStatus;
                         varSys.VarData.GlobalVariables[$"quest-{CodeToVarName(quest.Code)}-{obj.Code}-progress"] = progress;
+                        varSys.VarData.GlobalVariables[$"quest-{CodeToVarName(quest.Code)}-{obj.Code}-baseline"] = baseline;
                     }
                     else if (player != null)
                     {
                         varSys.SetPlayerVariable(player.PlayerUID, $"quest-{CodeToVarName(quest.Code)}-{obj.Code}-status", objStatus);
                         varSys.SetPlayerVariable(player.PlayerUID, $"quest-{CodeToVarName(quest.Code)}-{obj.Code}-progress", progress);
+                        varSys.SetPlayerVariable(player.PlayerUID, $"quest-{CodeToVarName(quest.Code)}-{obj.Code}-baseline", baseline);
                     }
                 }
             }

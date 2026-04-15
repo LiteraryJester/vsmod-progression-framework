@@ -90,7 +90,7 @@ ts.RegisterXpSourceKind("fishing", new MyFishingXpHandler());
 Interfaces: `IQuestObjectiveHandler`, `IQuestRewardHandler`, `IXpSourceHandler`.
 
 Built-in quest reward types: `addSellingItem`, `giveItem`, `awardTrainingXP`, `incrementEntityVariable`.
-Built-in quest objective type: `delivery`.
+Built-in quest objective types: `delivery`, `kill`.
 Built-in XP source kinds: `craft`, `dialogue`, `book`.
 
 ### Storage keys
@@ -98,6 +98,7 @@ Built-in XP source kinds: `craft`, `dialogue`, `book`.
 - `WatchedAttributes["progressionframework:questlog"]` — per-player quest state
 - `SaveGame["progressionframework:serverquests"]` — server-scoped quest state
 - `WatchedAttributes["progressionframework:training"]` — per-player training XP + levels
+- `global.pf:killcount:<pattern>` — server-wide kill counter per registered entity-code pattern (populated by the `kill` objective's `OnEntityDeath` subscriber)
 
 Registered identifiers that stay content-stable: entity class name `EntityEvolvingTrader`, item class name `ItemTrainingBook`, Harmony id `progressionframework`, hotkey id `progressionframeworkledger`, network channel `progressionframework:questsync`.
 
