@@ -202,6 +202,10 @@ public class QuestSystem : ModSystem
                     quest.Code = asset.Location.Domain + ":" + quest.Code;
                 }
 
+                quest.GroupLangKey = PrefixIfBare(quest.GroupLangKey, asset.Location.Domain);
+                quest.TitleLangKey = PrefixIfBare(quest.TitleLangKey, asset.Location.Domain);
+                quest.DescriptionLangKey = PrefixIfBare(quest.DescriptionLangKey, asset.Location.Domain);
+
                 if (QuestsByCode.ContainsKey(quest.Code))
                 {
                     api.Logger.Warning("[Quest] Duplicate quest code '{0}' at {1}; keeping first-loaded.",
@@ -262,6 +266,15 @@ public class QuestSystem : ModSystem
     /// flat <c>player.*</c> or <c>global.*</c> variables so dialog conditions stay readable.
     /// </summary>
     private static string CodeToVarName(string code) => code.Replace(':', '-');
+
+    /// <summary>Prefixes a bare lang key with the given mod domain. Returns null/empty
+    /// inputs unchanged so absent keys stay absent. Already-qualified keys (containing
+    /// ':') are returned unchanged.</summary>
+    private static string? PrefixIfBare(string? key, string domain)
+    {
+        if (string.IsNullOrEmpty(key) || key.Contains(':')) return key;
+        return domain + ":" + key;
+    }
 
     // -----------------------------------------------------------------
     // Server-scope state persistence

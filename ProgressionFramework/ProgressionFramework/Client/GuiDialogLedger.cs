@@ -73,7 +73,8 @@ public class GuiDialogLedger : GuiDialog
             .AddDialogTitleBar(Lang.Get("progressionframework:ledger-title"), () => TryClose())
             .BeginChildElements(bgBounds);
 
-        double y = 0;
+        // Reserve space for the dialog title bar before placing tab buttons.
+        double y = GuiStyle.TitleBarHeight;
 
         var trainingTabBounds = ElementBounds.Fixed(0, y, 140, 26);
         var questlogTabBounds = ElementBounds.Fixed(148, y, 140, 26);

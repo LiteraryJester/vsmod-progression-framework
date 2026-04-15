@@ -66,7 +66,7 @@ internal static class LedgerQuestLogTab
 
             foreach (var (quest, status, _) in sorted)
             {
-                ComposeQuestEntry(quests, player, quest, status,
+                ComposeQuestEntry(capi, quests, player, quest, status,
                     composer, width, ref y, barValues);
             }
 
@@ -75,7 +75,7 @@ internal static class LedgerQuestLogTab
     }
 
     private static void ComposeQuestEntry(
-        QuestSystem quests, IPlayer player,
+        ICoreClientAPI capi, QuestSystem quests, IPlayer player,
         Quest quest, QuestStatus status,
         GuiComposer composer, double width, ref double y,
         Dictionary<string, float[]> barValues)
@@ -111,14 +111,14 @@ internal static class LedgerQuestLogTab
 
         foreach (var obj in quest.Objectives)
         {
-            ComposeObjective(quests, player, quest, obj, composer, width, ref y, barValues);
+            ComposeObjective(capi, quests, player, quest, obj, composer, width, ref y, barValues);
         }
 
         y += 6;
     }
 
     private static void ComposeObjective(
-        QuestSystem quests, IPlayer player,
+        ICoreClientAPI capi, QuestSystem quests, IPlayer player,
         Quest quest, QuestObjective obj,
         GuiComposer composer, double width, ref double y,
         Dictionary<string, float[]> barValues)
@@ -134,7 +134,7 @@ internal static class LedgerQuestLogTab
         string header = !string.IsNullOrEmpty(obj.Title) ? obj.Title! : obj.Code;
         if (obj.Type.Equals("delivery", StringComparison.OrdinalIgnoreCase) && obj.Items.Count > 0)
         {
-            var parts = obj.Items.Select(r => $"{r.Quantity}x {ShortItemName(r.Item)}");
+            var parts = obj.Items.Select(r => $"{r.Quantity}x {ShortItemName(capi, r.Item)}");
             header += "  (" + string.Join(", ", parts) + ")";
         }
 
@@ -161,16 +161,20 @@ internal static class LedgerQuestLogTab
     private static string ResolveTitle(Quest quest) =>
         !string.IsNullOrEmpty(quest.TitleLangKey) ? Lang.Get(quest.TitleLangKey) : quest.Code;
 
-    /// <summary>Last path segment of an asset code, so "game:item/resource/rope" becomes "rope".
-    /// If a lang key "item-{stem}" exists, use its translation; else return the stem.</summary>
-    private static string ShortItemName(string itemCode)
+    /// <summary>Resolves an asset code to a display name via the VS Item/Block
+    /// registries. Falls back to the bare stem if neither registry matches.</summary>
+    private static string ShortItemName(ICoreClientAPI capi, string itemCode)
     {
+        var loc = new AssetLocation(itemCode);
+        var item = capi.World.GetItem(loc);
+        if (item != null) return item.GetHeldItemName(new ItemStack(item));
+        var block = capi.World.GetBlock(loc);
+        if (block != null) return block.GetHeldItemName(new ItemStack(block));
+
         int slash = itemCode.LastIndexOf('/');
         string stem = slash >= 0 ? itemCode[(slash + 1)..] : itemCode;
         int colon = stem.IndexOf(':');
         if (colon >= 0) stem = stem[(colon + 1)..];
-        string langKey = "item-" + stem;
-        string translated = Lang.Get(langKey);
-        return translated == langKey ? stem : translated;
+        return stem;
     }
 }
