@@ -196,12 +196,7 @@ public class GuiDialogLedger : GuiDialog
 
     private void ComposeQuestLogTab(GuiComposer composer, double width, ref double y)
     {
-        var font = CairoFont.WhiteSmallText();
-        var bounds = ElementBounds.Fixed(0, y, width, 24);
-        composer.AddStaticText(
-            Lang.Get("progressionframework:questlog-empty"),
-            font, EnumTextOrientation.Center, bounds);
-        y += 30;
+        LedgerQuestLogTab.Compose(capi, quests, composer, width, ref y, barValues);
     }
 
     // ------- Training tab helpers -------
