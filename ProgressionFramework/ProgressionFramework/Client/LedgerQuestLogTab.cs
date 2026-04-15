@@ -131,31 +131,59 @@ internal static class LedgerQuestLogTab
             return;
         }
 
-        string header = !string.IsNullOrEmpty(obj.Title) ? obj.Title! : obj.Code;
+        int progress = quests.GetObjectiveProgress(player, quest.Code, obj.Code);
+        int required = Math.Max(1, obj.Required);
+
+        string rawTitle = !string.IsNullOrEmpty(obj.Title) ? obj.Title! : obj.Code;
+        string title = CapitalizeFirst(rawTitle);
+
+        string modifiers = "";
         if (obj.Type.Equals("delivery", StringComparison.OrdinalIgnoreCase) && obj.Items.Count > 0)
         {
-            var parts = obj.Items.Select(r => $"{r.Quantity}x {ShortItemName(capi, r.Item)}");
-            header += "  (" + string.Join(", ", parts) + ")";
+            var parts = obj.Items
+                .Select(r => ExtractParens(ShortItemName(capi, r.Item)))
+                .Where(p => !string.IsNullOrEmpty(p))
+                .ToList();
+            if (parts.Count > 0)
+            {
+                string inner = string.Join(", ", parts.Select(p => p.Trim('(', ')')));
+                modifiers = " (" + inner + ")";
+            }
         }
+
+        string header = $"{title}{modifiers} {progress} of {required}";
 
         var headerBounds = ElementBounds.Fixed(36, y, width - 48, 18);
         composer.AddStaticText("• " + header, CairoFont.WhiteDetailText(), headerBounds);
         y += 20;
-
-        int progress = quests.GetObjectiveProgress(player, quest.Code, obj.Code);
-        int required = Math.Max(1, obj.Required);
 
         var barBounds = ElementBounds.Fixed(48, y, width - 64, 10);
         string barKey = $"questbar|{quest.Code}|{obj.Code}";
         var barColor = new double[] { 0.60, 0.78, 0.60, 1.0 };
         composer.AddStatbar(barBounds, barColor, barKey);
 
-        var numFont = CairoFont.WhiteDetailText().WithFontSize(10);
-        var numBounds = ElementBounds.Fixed(48, y - 1, width - 64, 12);
-        composer.AddStaticText($"{progress} / {required}", numFont, EnumTextOrientation.Center, numBounds);
-
         barValues[barKey] = new float[] { progress, 0, required };
         y += 16;
+    }
+
+    private static string CapitalizeFirst(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        if (char.IsUpper(s[0])) return s;
+        return char.ToUpper(s[0]) + s[1..];
+    }
+
+    /// <summary>Returns the last parenthesized segment of a string, including the
+    /// parens. Examples: "Board (Birch)" → "(Birch)"; "Linen (Normal stitches)" →
+    /// "(Normal stitches)"; "Coil of rope" → "". Nested parens aren't expected here.</summary>
+    private static string ExtractParens(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "";
+        int close = name.LastIndexOf(')');
+        if (close < 0) return "";
+        int open = name.LastIndexOf('(', close);
+        if (open < 0) return "";
+        return name.Substring(open, close - open + 1);
     }
 
     private static string ResolveTitle(Quest quest) =>
