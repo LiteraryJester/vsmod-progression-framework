@@ -1,9 +1,8 @@
-using System.Text;
 using HarmonyLib;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
-using Vintagestory.API.Server;
+using ProgressionFramework.Client;
 using ProgressionFramework.Training;
 using ProgressionFramework.Quests;
 using ProgressionFramework.Trading;
@@ -14,7 +13,7 @@ namespace ProgressionFramework
     {
         private const string HarmonyId = "progressionframework";
         private Harmony? harmony;
-        private GuiDialogTrainingLedger? trainingDialog;
+        private GuiDialogLedger? ledgerDialog;
 
         public override void Start(ICoreAPI api)
         {
@@ -33,12 +32,14 @@ namespace ProgressionFramework
 
         public override void StartClientSide(ICoreClientAPI api)
         {
-            api.Input.RegisterHotKey("progressionframeworktrainingledger",
-                Lang.Get("progressionframework:training-ledger-title"), GlKeys.L,
+            api.Input.RegisterHotKey("progressionframeworkledger",
+                Lang.Get("progressionframework:ledger-title"), GlKeys.L,
                 HotkeyType.GUIOrOtherControls);
 
             var trainingSystem = api.ModLoader.GetModSystem<TrainingSystem>();
-            trainingDialog = new GuiDialogTrainingLedger(api, trainingSystem);
+            var questSystem = api.ModLoader.GetModSystem<QuestSystem>();
+            ledgerDialog = new GuiDialogLedger(api, trainingSystem, questSystem);
+            api.Gui.RegisterDialog(ledgerDialog);
         }
     }
 }
