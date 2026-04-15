@@ -37,6 +37,11 @@ public class QuestSystem : ModSystem
     /// <summary>Source-of-truth state for server-scoped quests, keyed by quest code.</summary>
     private readonly Dictionary<string, TreeAttribute> serverQuestState = new();
 
+    /// <summary>Client-side mirror of <see cref="serverQuestState"/>. Populated by
+    /// <see cref="ServerQuestSnapshot"/> and <see cref="ServerQuestUpdate"/> packets
+    /// registered in Task 3. Empty on the server.</summary>
+    private readonly Dictionary<string, TreeAttribute> clientServerQuestState = new();
+
     private readonly Dictionary<string, IQuestObjectiveHandler> objectiveHandlers =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, IQuestRewardHandler> rewardHandlers =
@@ -252,24 +257,24 @@ public class QuestSystem : ModSystem
     public Quest? GetQuest(string code) =>
         QuestsByCode.TryGetValue(ResolveCode(code), out var q) ? q : null;
 
-    public QuestStatus GetStatus(IServerPlayer? player, string code)
+    public QuestStatus GetStatus(IPlayer? player, string code)
     {
         code = ResolveCode(code);
         if (IsDisabled(code)) return QuestStatus.Disabled;
-        var tree = GetQuestNode(player, code, create: false);
+        var tree = GetQuestNodeReadonly(player, code);
         if (tree == null) return QuestStatus.Unavailable;
         return ParseStatus(tree.GetString("status", "unavailable"));
     }
 
-    public int GetObjectiveProgress(IServerPlayer? player, string questCode, string objectiveCode)
+    public int GetObjectiveProgress(IPlayer? player, string questCode, string objectiveCode)
     {
-        var tree = GetQuestNode(player, ResolveCode(questCode), create: false);
+        var tree = GetQuestNodeReadonly(player, ResolveCode(questCode));
         return tree?.GetTreeAttribute("objectives")?.GetTreeAttribute(objectiveCode)?.GetInt("progress") ?? 0;
     }
 
-    public bool IsObjectiveComplete(IServerPlayer? player, string questCode, string objectiveCode)
+    public bool IsObjectiveComplete(IPlayer? player, string questCode, string objectiveCode)
     {
-        var tree = GetQuestNode(player, ResolveCode(questCode), create: false);
+        var tree = GetQuestNodeReadonly(player, ResolveCode(questCode));
         var objTree = tree?.GetTreeAttribute("objectives")?.GetTreeAttribute(objectiveCode);
         return objTree?.GetString("status") == "completed";
     }
@@ -643,6 +648,32 @@ public class QuestSystem : ModSystem
     // -----------------------------------------------------------------
     // State tree helpers — scope-aware
     // -----------------------------------------------------------------
+
+    /// <summary>
+    /// Read-only, scope- and side-aware tree lookup for quest state.
+    /// Player-scope reads go through <see cref="EntityPlayer.WatchedAttributes"/>
+    /// (identical tree on server and client). Server-scope reads go through
+    /// <see cref="serverQuestState"/> on the server and
+    /// <see cref="clientServerQuestState"/> on the client.
+    /// </summary>
+    private ITreeAttribute? GetQuestNodeReadonly(IPlayer? player, string code)
+    {
+        var quest = GetQuest(code);
+        if (quest == null) return null;
+
+        if (quest.Scope == QuestScope.Server)
+        {
+            if (api?.Side == EnumAppSide.Client)
+            {
+                return clientServerQuestState.TryGetValue(code, out var t) ? t : null;
+            }
+            return serverQuestState.TryGetValue(code, out var srv) ? srv : null;
+        }
+
+        if (player == null) return null;
+        var root = player.Entity.WatchedAttributes.GetTreeAttribute(PlayerQuestTreeKey);
+        return root?.GetTreeAttribute(code);
+    }
 
     private ITreeAttribute? GetQuestNode(IServerPlayer? player, string code, bool create)
     {
