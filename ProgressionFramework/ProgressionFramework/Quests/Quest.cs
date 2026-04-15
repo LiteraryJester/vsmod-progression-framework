@@ -88,6 +88,10 @@ public class QuestReward
     public int Amount { get; set; } = 1;
     public int ThresholdValue { get; set; }
     public string? ThresholdVariable { get; set; }
+    /// <summary>Scope for the target variable. Valid values: "entity" (default),
+    /// "player", "global", "group". Defaults to "entity" so existing quests
+    /// keep working unchanged.</summary>
+    public string? VariableScope { get; set; }
 }
 
 /// <summary>

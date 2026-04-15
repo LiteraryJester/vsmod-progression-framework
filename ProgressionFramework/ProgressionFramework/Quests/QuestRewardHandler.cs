@@ -41,7 +41,7 @@ internal static class BuiltInRewardHandlers
         {
             DispatchToTrader(npc, player.Entity, "incrementVariable", new JsonObject(new JObject
             {
-                ["scope"] = "entity",
+                ["scope"] = reward.VariableScope ?? "entity",
                 ["name"] = reward.VariableName,
                 ["amount"] = reward.Amount,
                 ["thresholdValue"] = reward.ThresholdValue,
