@@ -147,6 +147,45 @@ internal static class BuiltInObjectiveHandlers
             return true;
         }
     }
+
+    /// <summary>Tracks kills of entities whose <c>Code.ToString()</c> matches
+    /// the objective's <see cref="QuestObjective.Pattern"/>. On start, snapshots
+    /// the global counter for the pattern as the baseline. On progress attempt,
+    /// computes current - baseline and writes the delta to the objective's
+    /// progress counter; returns true if anything changed.</summary>
+    public sealed class Kill : IQuestObjectiveHandler
+    {
+        public void OnObjectiveStarted(IServerPlayer player, Quest quest, QuestObjective objective)
+        {
+            if (string.IsNullOrEmpty(objective.Pattern)) return;
+
+            var qs = player.Entity.Api.ModLoader.GetModSystem<QuestSystem>();
+            int baseline = qs.GetKillCount(objective.Pattern);
+
+            var objTree = qs.GetOrAddObjectiveTreePublic(player, quest, objective.Code);
+            objTree.SetInt("baseline", baseline);
+            objTree.SetInt("progress", 0);
+        }
+
+        public bool TryProgress(IServerPlayer player, Quest quest, QuestObjective objective, object eventData)
+        {
+            var ctx = (QuestProgressContext)eventData;
+            if (string.IsNullOrEmpty(objective.Pattern)) return false;
+
+            var qs = player.Entity.Api.ModLoader.GetModSystem<QuestSystem>();
+            int baseline = ctx.ObjTree.GetInt("baseline");
+            int current = qs.GetKillCount(objective.Pattern);
+            int newProgress = Math.Max(0, current - baseline);
+
+            int oldProgress = ctx.ObjTree.GetInt("progress");
+            if (newProgress == oldProgress) return false;
+
+            ctx.ObjTree.SetInt("progress", newProgress);
+            ctx.Api.Logger.Notification("[Quest] Kill: {0} progress {1}/{2} (pattern {3})",
+                player.PlayerName, newProgress, objective.Required, objective.Pattern);
+            return true;
+        }
+    }
 }
 
 /// <summary>Shared context the handlers receive for <c>TryProgress</c>. Lets them

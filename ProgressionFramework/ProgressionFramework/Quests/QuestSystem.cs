@@ -48,6 +48,10 @@ public class QuestSystem : ModSystem
     private readonly Dictionary<string, IQuestRewardHandler> rewardHandlers =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Patterns referenced by any loaded quest's kill objectives.
+    /// Populated at AssetsFinalize; OnEntityDeath walks this set.</summary>
+    private readonly HashSet<string> killPatterns = new();
+
     private ICoreAPI? api;
     private ICoreServerAPI? sapi;
 
@@ -68,6 +72,7 @@ public class QuestSystem : ModSystem
         RegisterRewardType("incrementEntityVariable", new BuiltInRewardHandlers.IncrementEntityVariable());
 
         RegisterObjectiveType("delivery", new BuiltInObjectiveHandlers.Delivery());
+        RegisterObjectiveType("kill", new BuiltInObjectiveHandlers.Kill());
 
         api.Network.RegisterChannel("progressionframework:questsync")
             .RegisterMessageType<ServerQuestSnapshot>()
@@ -94,6 +99,32 @@ public class QuestSystem : ModSystem
         api.Event.SaveGameLoaded += LoadServerState;
         api.Event.GameWorldSave += SaveServerState;
         api.Event.PlayerNowPlaying += OnPlayerNowPlayingSendSnapshot;
+        api.Event.OnEntityDeath += OnEntityDeath;
+    }
+
+    /// <summary>Increments the per-pattern global kill counter for any loaded
+    /// kill-objective pattern matched by the dying entity's code. Runs on every
+    /// entity death server-side; short-circuits if no kill patterns are loaded.</summary>
+    private void OnEntityDeath(Entity entity, DamageSource damageSource)
+    {
+        if (entity == null || killPatterns.Count == 0) return;
+
+        string code = entity.Code?.ToString() ?? "";
+        if (string.IsNullOrEmpty(code)) return;
+
+        var varSys = sapi?.ModLoader.GetModSystem<VariablesModSystem>();
+        if (varSys?.VarData == null) return;
+
+        foreach (var pattern in killPatterns)
+        {
+            if (!WildcardUtil.Match(pattern, code)) continue;
+
+            string varName = $"pf:killcount:{pattern}";
+            string? currentStr = varSys.GetVariable(EnumActivityVariableScope.Global, varName, null);
+            int current = int.TryParse(currentStr, out int n) ? n : 0;
+            int next = current + 1;
+            varSys.SetVariable(null, EnumActivityVariableScope.Global, varName, next.ToString());
+        }
     }
 
     private void OnPlayerNowPlayingSendSnapshot(IServerPlayer player)
@@ -223,6 +254,25 @@ public class QuestSystem : ModSystem
         }
 
         api.Logger.Notification("[Quest] Loaded {0} quests", loaded);
+
+        killPatterns.Clear();
+        foreach (var quest in QuestsByCode.Values)
+        {
+            foreach (var obj in quest.Objectives)
+            {
+                if (obj.Type.Equals("kill", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrEmpty(obj.Pattern))
+                {
+                    killPatterns.Add(obj.Pattern);
+                }
+            }
+        }
+
+        if (killPatterns.Count > 0)
+        {
+            api.Logger.Notification("[Quest] Registered {0} kill patterns: {1}",
+                killPatterns.Count, string.Join(", ", killPatterns));
+        }
     }
 
     /// <summary>
@@ -371,6 +421,23 @@ public class QuestSystem : ModSystem
         return objTree?.GetString("status") == "completed";
     }
 
+    /// <summary>Returns the current global kill counter for a pattern
+    /// (server-side, 0 if never incremented).</summary>
+    public int GetKillCount(string pattern)
+    {
+        if (sapi == null) return 0;
+        var varSys = sapi.ModLoader.GetModSystem<VariablesModSystem>();
+        if (varSys?.VarData == null) return 0;
+        string? value = varSys.GetVariable(EnumActivityVariableScope.Global, $"pf:killcount:{pattern}", null);
+        return int.TryParse(value, out int n) ? n : 0;
+    }
+
+    /// <summary>Public wrapper so objective handlers can access the per-objective
+    /// attribute tree without duplicating lookup code.</summary>
+    public ITreeAttribute GetOrAddObjectiveTreePublic(
+        IServerPlayer player, Quest quest, string objectiveCode)
+        => GetOrAddObjectiveTree(player, quest, objectiveCode);
+
     /// <summary>
     /// True when the quest can be started for this player. For server quests, the
     /// current global status must not already be Active/Completed and prereqs must
@@ -413,6 +480,15 @@ public class QuestSystem : ModSystem
         var tree = GetQuestNode(player, code, create: true)!;
         tree.SetString("status", "active");
         tree.SetLong("startedAt", player.Entity.World.ElapsedMilliseconds);
+
+        foreach (var obj in quest.Objectives)
+        {
+            if (objectiveHandlers.TryGetValue(obj.Type, out var handler))
+            {
+                handler.OnObjectiveStarted(player, quest, obj);
+            }
+        }
+
         MarkDirty(player, quest);
         SyncFlat(player, quest);
 
