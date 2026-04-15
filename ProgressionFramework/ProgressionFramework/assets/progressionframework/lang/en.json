@@ -1,5 +1,12 @@
 {
-    "training-ledger-title": "Training Ledger",
+    "ledger-title": "Ledger",
+    "ledger-tab-training": "Training",
+    "ledger-tab-questlog": "Quest Log",
+    "questlog-empty": "No active or completed quests.",
+    "questlog-group-other": "Other",
+    "questlog-status-active": "Active",
+    "questlog-status-completed": "Completed",
+    "questlog-shared-subtitle": "(shared)",
     "training-levelup": "You reached: {0}",
     "training-complete": "(Max level)",
     "trainingbook-nosource": "This book has no registered training.",
