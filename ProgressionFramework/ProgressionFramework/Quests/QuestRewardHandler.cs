@@ -1,3 +1,4 @@
+using System;
 using Newtonsoft.Json.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
@@ -98,16 +99,64 @@ internal static class BuiltInRewardHandlers
     }
 }
 
-/// <summary>
-/// Minimal stub objective handler for "delivery". Delivery flow is still
-/// driven by hand-in paths inside <see cref="QuestSystem"/>; this handler
-/// exists so the registry isn't missing the "delivery" kind.
-/// </summary>
+/// <summary>Built-in quest objective handlers, registered by <see cref="QuestSystem"/>.</summary>
 internal static class BuiltInObjectiveHandlers
 {
+    /// <summary>Standard delivery objective: take a full set of required items
+    /// from the player's inventory and advance progress by however many full
+    /// sets they could cover, capped at the remaining threshold.</summary>
     public sealed class Delivery : IQuestObjectiveHandler
     {
         public void OnObjectiveStarted(IServerPlayer player, Quest quest, QuestObjective objective) { }
-        public bool TryProgress(IServerPlayer player, Quest quest, QuestObjective objective, object eventData) => false;
+
+        public bool TryProgress(IServerPlayer player, Quest quest, QuestObjective objective, object eventData)
+        {
+            var ctx = (QuestProgressContext)eventData;
+            int currentProgress = ctx.ObjTree.GetInt("progress");
+            int remainingNeeded = objective.Required - currentProgress;
+            if (remainingNeeded <= 0) return false;
+
+            int maxTurnIns = int.MaxValue;
+            foreach (var req in objective.Items)
+            {
+                if (req.Quantity <= 0) continue;
+                int have = ctx.CountInInventory(player, req.Item);
+                int canDo = have / req.Quantity;
+                if (canDo < maxTurnIns) maxTurnIns = canDo;
+            }
+
+            int turnIns = Math.Min(maxTurnIns, remainingNeeded);
+            if (turnIns <= 0)
+            {
+                ctx.Api.Logger.Notification("[Quest] TryDeliver: {0} missing items for '{1}/{2}'",
+                    player.PlayerName, quest.Code, objective.Code);
+                return false;
+            }
+
+            foreach (var req in objective.Items)
+            {
+                ctx.TakeFromInventory(player, req.Item, req.Quantity * turnIns);
+            }
+
+            int progress = currentProgress + turnIns;
+            ctx.ObjTree.SetInt("progress", progress);
+
+            ctx.Api.Logger.Notification("[Quest] TryDeliver: {0} turned in {1}x '{2}/{3}' ({4}/{5})",
+                player.PlayerName, turnIns, quest.Code, objective.Code, progress, objective.Required);
+
+            return true;
+        }
     }
+}
+
+/// <summary>Shared context the handlers receive for <c>TryProgress</c>. Lets them
+/// read/write the objective's state tree and use inventory helpers without
+/// duplicating them per handler.</summary>
+public sealed class QuestProgressContext
+{
+    public ICoreServerAPI Api { get; init; } = null!;
+    public ITreeAttribute ObjTree { get; init; } = null!;
+    public System.Func<IServerPlayer, string, int> CountInInventory { get; init; } = null!;
+    public System.Action<IServerPlayer, string, int> TakeFromInventory { get; init; } = null!;
+    public Entity Npc { get; init; } = null!;
 }

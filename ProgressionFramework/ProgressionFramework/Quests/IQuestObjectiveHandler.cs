@@ -13,9 +13,11 @@ public interface IQuestObjectiveHandler
     void OnObjectiveStarted(IServerPlayer player, Quest quest, QuestObjective objective);
 
     /// <summary>
-    /// Attempt to progress the objective in response to an event. The meaning of
-    /// <paramref name="eventData"/> depends on the objective type. Returns true
-    /// if the objective is now fully complete.
+    /// Attempts to advance the objective's state based on the current event. Returns
+    /// true if the objective state was advanced (e.g., items taken, counter bumped).
+    /// Returning false causes <c>TryDeliver</c> to abort without persisting or
+    /// broadcasting state. The framework checks <c>progress &gt;= Required</c>
+    /// separately to detect full completion after this returns.
     /// </summary>
     bool TryProgress(IServerPlayer player, Quest quest, QuestObjective objective, object eventData);
 }

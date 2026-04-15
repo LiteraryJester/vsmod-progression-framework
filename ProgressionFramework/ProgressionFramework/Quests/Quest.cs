@@ -56,6 +56,12 @@ public class QuestObjective
     public List<QuestItemRequirement> Items { get; set; } = new();
     /// <summary>Number of successful turn-ins needed to finish this objective. Defaults to 1.</summary>
     public int Required { get; set; } = 1;
+    /// <summary>Pattern used by objective types that filter entity codes
+    /// (e.g., <c>kill</c>). Matched against <c>entity.Code.ToString()</c>
+    /// via <see cref="Vintagestory.API.Util.WildcardUtil.Match(string, string)"/>.
+    /// Example: <c>"game:drifter-*"</c>. Null for objective types that
+    /// don't use it.</summary>
+    public string? Pattern { get; set; }
     /// <summary>Rewards granted the moment this objective flips to complete.</summary>
     public List<QuestReward> Rewards { get; set; } = new();
 }

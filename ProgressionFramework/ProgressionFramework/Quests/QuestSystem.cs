@@ -449,49 +449,27 @@ public class QuestSystem : ModSystem
             api?.Logger.Notification("[Quest] TryDeliver: objective '{0}/{1}' already complete", questCode, objectiveCode);
             return false;
         }
-        if (!objective.Type.Equals("delivery", StringComparison.OrdinalIgnoreCase))
+
+        if (!objectiveHandlers.TryGetValue(objective.Type, out var handler))
         {
-            api?.Logger.Warning("[Quest] TryDeliver: objective '{0}/{1}' is type {2}, not Delivery",
-                questCode, objectiveCode, objective.Type);
+            api?.Logger.Warning("[Quest] TryDeliver: no handler registered for objective type '{0}'", objective.Type);
             return false;
         }
 
         var objTree = GetOrAddObjectiveTree(player, quest, objectiveCode);
-        int currentProgress = objTree.GetInt("progress");
-        int remainingNeeded = objective.Required - currentProgress;
-
-        // Batch the turn-in: take as many full sets of required items as the
-        // player can cover, capped at the remaining threshold. One click on
-        // "deliver boards" with 64 planks in the bag counts as 64 deliveries,
-        // not 64 clicks.
-        int maxTurnIns = int.MaxValue;
-        foreach (var req in objective.Items)
+        var ctx = new QuestProgressContext
         {
-            if (req.Quantity <= 0) continue;
-            int have = CountInInventory(player, req.Item);
-            int canDo = have / req.Quantity;
-            if (canDo < maxTurnIns) maxTurnIns = canDo;
-        }
+            Api = sapi!,
+            ObjTree = objTree,
+            CountInInventory = CountInInventory,
+            TakeFromInventory = TakeFromInventory,
+            Npc = npc
+        };
 
-        int turnIns = Math.Min(maxTurnIns, remainingNeeded);
-        if (turnIns <= 0)
-        {
-            api?.Logger.Notification("[Quest] TryDeliver: {0} missing items for '{1}/{2}'",
-                player.PlayerName, questCode, objectiveCode);
-            return false;
-        }
+        bool advanced = handler.TryProgress(player, quest, objective, ctx);
+        if (!advanced) return false;
 
-        foreach (var req in objective.Items)
-        {
-            TakeFromInventory(player, req.Item, req.Quantity * turnIns);
-        }
-
-        int progress = currentProgress + turnIns;
-        objTree.SetInt("progress", progress);
-
-        api?.Logger.Notification("[Quest] TryDeliver: {0} turned in {1}x '{2}/{3}' ({4}/{5})",
-            player.PlayerName, turnIns, questCode, objectiveCode, progress, objective.Required);
-
+        int progress = objTree.GetInt("progress");
         ObjectiveProgressed?.Invoke(player, quest, objective);
 
         if (progress >= objective.Required)
