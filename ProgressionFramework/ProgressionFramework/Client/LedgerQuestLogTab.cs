@@ -123,6 +123,14 @@ internal static class LedgerQuestLogTab
         GuiComposer composer, double width, ref double y,
         Dictionary<string, float[]> barValues)
     {
+        if (string.IsNullOrEmpty(obj.Code))
+        {
+            // Malformed quest JSON: objective has no code. Skip silently — this is
+            // never expected in practice and rendering would silently overwrite the
+            // previous objective's bar in barValues.
+            return;
+        }
+
         string header = !string.IsNullOrEmpty(obj.Title) ? obj.Title! : obj.Code;
         if (obj.Type.Equals("delivery", StringComparison.OrdinalIgnoreCase) && obj.Items.Count > 0)
         {
@@ -138,7 +146,7 @@ internal static class LedgerQuestLogTab
         int required = Math.Max(1, obj.Required);
 
         var barBounds = ElementBounds.Fixed(48, y, width - 64, 10);
-        string barKey = $"questbar-{quest.Code}-{obj.Code}";
+        string barKey = $"questbar|{quest.Code}|{obj.Code}";
         var barColor = new double[] { 0.60, 0.78, 0.60, 1.0 };
         composer.AddStatbar(barBounds, barColor, barKey);
 
