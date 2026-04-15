@@ -93,10 +93,10 @@ public class QuestSystem : ModSystem
         sapi = api;
         api.Event.SaveGameLoaded += LoadServerState;
         api.Event.GameWorldSave += SaveServerState;
-        api.Event.PlayerJoin += OnPlayerJoinSendSnapshot;
+        api.Event.PlayerNowPlaying += OnPlayerNowPlayingSendSnapshot;
     }
 
-    private void OnPlayerJoinSendSnapshot(IServerPlayer player)
+    private void OnPlayerNowPlayingSendSnapshot(IServerPlayer player)
     {
         if (sapi == null) return;
         var channel = sapi.Network.GetChannel("progressionframework:questsync");
@@ -126,6 +126,7 @@ public class QuestSystem : ModSystem
     public override void StartClientSide(ICoreClientAPI api)
     {
         var channel = api.Network.GetChannel("progressionframework:questsync");
+        if (channel == null) return;
         channel.SetMessageHandler<ServerQuestSnapshot>(OnSnapshotReceived);
         channel.SetMessageHandler<ServerQuestUpdate>(OnUpdateReceived);
     }
