@@ -32,10 +32,16 @@ public class GuiDialogLedger : GuiDialog
     public override void OnOwnPlayerDataReceived()
     {
         base.OnOwnPlayerDataReceived();
-        capi.World.Player.Entity.WatchedAttributes
-            .RegisterModifiedListener(TrainingSystem.TrainingTreeKey, OnDataChanged);
-        capi.World.Player.Entity.WatchedAttributes
-            .RegisterModifiedListener(QuestSystem.PlayerQuestTreeKey, OnDataChanged);
+
+        // Re-subscription guard: the engine may call this multiple times per session
+        // (respawn, dimension change). Strip prior bindings before adding again so
+        // OnDataChanged is registered exactly once with each source.
+        var attrs = capi.World.Player.Entity.WatchedAttributes;
+        attrs.UnregisterListener(OnDataChanged);
+        attrs.RegisterModifiedListener(TrainingSystem.TrainingTreeKey, OnDataChanged);
+        attrs.RegisterModifiedListener(QuestSystem.PlayerQuestTreeKey, OnDataChanged);
+
+        quests.ServerQuestStateChanged -= OnDataChanged;
         quests.ServerQuestStateChanged += OnDataChanged;
     }
 
@@ -74,13 +80,13 @@ public class GuiDialogLedger : GuiDialog
         composer.AddToggleButton(
             Lang.Get("progressionframework:ledger-tab-training"),
             CairoFont.WhiteSmallishText(),
-            on => { if (on) SwitchTab(LedgerTab.Training); },
+            _ => SwitchTab(LedgerTab.Training),
             trainingTabBounds,
             "tab-training");
         composer.AddToggleButton(
             Lang.Get("progressionframework:ledger-tab-questlog"),
             CairoFont.WhiteSmallishText(),
-            on => { if (on) SwitchTab(LedgerTab.QuestLog); },
+            _ => SwitchTab(LedgerTab.QuestLog),
             questlogTabBounds,
             "tab-questlog");
         y += 36;
@@ -109,7 +115,9 @@ public class GuiDialogLedger : GuiDialog
 
     private void SwitchTab(LedgerTab tab)
     {
-        if (currentTab == tab) return;
+        // Always recompose, even when clicking the already-active tab — that path
+        // re-applies the toggle button states (the base toggle flips Off when the
+        // active tab is clicked, leaving the bar visually empty without a recompose).
         currentTab = tab;
         ComposeDialog();
     }
