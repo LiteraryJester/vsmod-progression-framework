@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
@@ -67,6 +68,10 @@ public class QuestSystem : ModSystem
         RegisterRewardType("incrementEntityVariable", new BuiltInRewardHandlers.IncrementEntityVariable());
 
         RegisterObjectiveType("delivery", new BuiltInObjectiveHandlers.Delivery());
+
+        api.Network.RegisterChannel("progressionframework:questsync")
+            .RegisterMessageType<ServerQuestSnapshot>()
+            .RegisterMessageType<ServerQuestUpdate>();
     }
 
     public void RegisterObjectiveType(string type, IQuestObjectiveHandler handler)
@@ -88,6 +93,79 @@ public class QuestSystem : ModSystem
         sapi = api;
         api.Event.SaveGameLoaded += LoadServerState;
         api.Event.GameWorldSave += SaveServerState;
+        api.Event.PlayerJoin += OnPlayerJoinSendSnapshot;
+    }
+
+    private void OnPlayerJoinSendSnapshot(IServerPlayer player)
+    {
+        if (sapi == null) return;
+        var channel = sapi.Network.GetChannel("progressionframework:questsync");
+        if (channel == null) return;
+
+        var msg = new ServerQuestSnapshot();
+        foreach (var (code, tree) in serverQuestState)
+        {
+            msg.States[code] = SerializeTree(tree);
+        }
+        channel.SendPacket(msg, player);
+    }
+
+    /// <summary>Broadcast an updated server-quest tree to all connected players.
+    /// Called from <see cref="MarkDirty"/> for server-scope quests.</summary>
+    private void MarkServerQuestDirty(string code)
+    {
+        if (sapi == null) return;
+        var channel = sapi.Network.GetChannel("progressionframework:questsync");
+        if (channel == null) return;
+
+        byte[]? bytes = serverQuestState.TryGetValue(code, out var tree)
+            ? SerializeTree(tree) : null;
+        channel.BroadcastPacket(new ServerQuestUpdate { Code = code, StateBytes = bytes });
+    }
+
+    public override void StartClientSide(ICoreClientAPI api)
+    {
+        var channel = api.Network.GetChannel("progressionframework:questsync");
+        channel.SetMessageHandler<ServerQuestSnapshot>(OnSnapshotReceived);
+        channel.SetMessageHandler<ServerQuestUpdate>(OnUpdateReceived);
+    }
+
+    /// <summary>Fired after client-side <see cref="clientServerQuestState"/> changes
+    /// due to an incoming snapshot or update. GUI listens for this to recompose.</summary>
+    public event System.Action? ServerQuestStateChanged;
+
+    private void OnSnapshotReceived(ServerQuestSnapshot msg)
+    {
+        clientServerQuestState.Clear();
+        foreach (var (code, bytes) in msg.States)
+        {
+            clientServerQuestState[code] = DeserializeTree(bytes);
+        }
+        ServerQuestStateChanged?.Invoke();
+    }
+
+    private void OnUpdateReceived(ServerQuestUpdate msg)
+    {
+        if (msg.StateBytes == null) clientServerQuestState.Remove(msg.Code);
+        else clientServerQuestState[msg.Code] = DeserializeTree(msg.StateBytes);
+        ServerQuestStateChanged?.Invoke();
+    }
+
+    private static TreeAttribute DeserializeTree(byte[] bytes)
+    {
+        var tree = new TreeAttribute();
+        using var ms = new System.IO.MemoryStream(bytes);
+        using var reader = new System.IO.BinaryReader(ms);
+        tree.FromBytes(reader);
+        return tree;
+    }
+
+    private static byte[] SerializeTree(TreeAttribute tree)
+    {
+        using var ms = new System.IO.MemoryStream();
+        using var writer = new System.IO.BinaryWriter(ms);
+        tree.ToBytes(writer);
+        return ms.ToArray();
     }
 
     public override void AssetsFinalize(ICoreAPI api)
@@ -733,7 +811,10 @@ public class QuestSystem : ModSystem
         {
             player.Entity.WatchedAttributes.MarkPathDirty(PlayerQuestTreeKey);
         }
-        // Server-scope state is persisted on GameWorldSave; nothing to mark.
+        else // QuestScope.Server
+        {
+            MarkServerQuestDirty(quest.Code);
+        }
     }
 
     /// <summary>
