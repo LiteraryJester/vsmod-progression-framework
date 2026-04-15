@@ -74,16 +74,21 @@ Migrated from `GuiDialogTrainingLedger.ComposeDialog` into `GuiDialogLedger.Comp
 - Server-scope quests: read from `QuestSystem.clientServerQuestState[quest.Code]` (see §4).
 - Both paths produce a `TreeAttribute` with the same layout (status + per-objective counters).
 
-### New `QuestSystem` client-friendly helpers
+### `QuestSystem` helpers (scope + side aware)
 
-Added to `QuestSystem` so tree keys are not duplicated in GUI code. Scope-aware — GUI doesn't care where the state lives:
+The existing `GetStatus(IServerPlayer?, ...)` and `GetObjectiveProgress(IServerPlayer?, ...)` are server-typed. They get renamed and generalized to `IPlayer?` so the client can call them:
 
 ```csharp
-public QuestStatus GetQuestStatus(IPlayer player, string questCode);
-public int GetObjectiveProgress(IPlayer player, string questCode, string objectiveCode);
+public QuestStatus GetStatus(IPlayer? player, string questCode);
+public int GetObjectiveProgress(IPlayer? player, string questCode, string objectiveCode);
+public bool IsObjectiveComplete(IPlayer? player, string questCode, string objectiveCode);
 ```
 
-Both helpers dispatch on `Quest.Scope`. For `Player` scope, they read from `player.Entity.WatchedAttributes[PlayerQuestTreeKey]`. For `Server` scope, they read from `serverQuestState` when called on the server and from `clientServerQuestState` when called on the client. The scope check inside the helper picks the right source; callers stay agnostic.
+Each helper looks up the backing tree via a new private `GetQuestNodeReadonly(IPlayer? player, string code)`. The new reader dispatches on `Quest.Scope`:
+- `Player` scope: read from `player.Entity.WatchedAttributes[PlayerQuestTreeKey]`. Works identically on server and client because `WatchedAttributes` is a synced tree.
+- `Server` scope: server reads from `serverQuestState`; client reads from `clientServerQuestState`. A small `api.Side` check decides.
+
+All existing call sites keep working — `IServerPlayer : IPlayer`, so the parameter widening is source-compatible.
 
 ### Layout and filtering
 
@@ -99,9 +104,10 @@ Expanded by default (brainstorm decision B). Example:
 ```
 ▸ Drake's Tradeship                               Active
   Drake needs a sturdy vessel to resume trade…
-    • Deliver varnish    7 / 18 resin   ▓▓▓▓▓░░░░░
-                         0 / 6 fat      ░░░░░░░░░░
-    • Deliver timber     3 / 12 planks  ▓▓░░░░░░░░
+    • Deliver varnish (18 resin, 6 fat)
+      ░░░░░░░░░░  0 / 1
+    • Deliver timber (1 plank each)
+      ▓▓▓▓░░░░░░  3 / 12
 ```
 
 - Title: `Lang.Get(quest.TitleLangKey)` in bold.
@@ -109,8 +115,9 @@ Expanded by default (brainstorm decision B). Example:
 - Status badge on the right: `Active` rendered in neutral `#C0C0C0`, `Completed` in `#D4AF37` with a `✓` prefix.
 - Shared subtitle: if `quest.Scope == Server`, a muted `(shared)` line appears directly under the title.
 - Objectives: one row per `QuestObjective`.
-  - `delivery`: one sub-row per `QuestItemRequirement`. Per-requirement progress comes from a new helper `QuestSystem.GetDeliveryRequirementProgress(player, questCode, objectiveCode, itemCode)` so the GUI doesn't reach into the delivery handler's tree layout. Bar maximum = `requirement.Quantity * objective.Required`. Uses `AddStatbar` + `SetValues`, mirroring the training tab.
-  - Other objective types: single bar, `current / required` where `current` is `GetObjectiveProgress(player, questCode, objectiveCode)` and `required` is `objective.Required`.
+  - Title line: `objective.Title` (a plain string in the JSON — not a lang key), or `objective.Code` as a fallback when Title is null.
+  - Requirements line (for `delivery` type only): a comma-joined informational list of `"Nx item-name"` from `objective.Items` — e.g. "18 resin, 6 fat". Item names resolved via `Lang.Get("item-" + item-code-without-domain)` with a fallback to the raw code; good enough for v1.
+  - Progress bar: a single `AddStatbar` with current = `QuestSystem.GetObjectiveProgress(player, quest.Code, objective.Code)` and max = `objective.Required`. This matches how the quest tree actually stores progress (one counter per objective, incremented per turn-in). Non-delivery objective types share the same bar without the requirements line.
 
 ### Live updates
 
