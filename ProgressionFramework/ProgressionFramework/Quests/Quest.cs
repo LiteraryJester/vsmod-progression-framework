@@ -121,6 +121,12 @@ public class Quest
     public bool AutoEnable { get; set; } = true;
     /// <summary>Codes of other quests that must be Completed before this one is Available.</summary>
     public List<string> Prerequisites { get; set; } = new();
+    /// <summary>Optional completion threshold. When set, the quest completes
+    /// once this many objectives are complete rather than requiring all of
+    /// them. Null (default) keeps AND-all behavior. Objectives that remain
+    /// incomplete when the quest finishes stay pending and further turn-ins
+    /// are rejected because the quest is no longer Active.</summary>
+    public int? RequiredObjectiveCount { get; set; }
     public List<QuestObjective> Objectives { get; set; } = new();
     /// <summary>Rewards granted when all objectives reach their Required threshold.</summary>
     public List<QuestReward> Rewards { get; set; } = new();

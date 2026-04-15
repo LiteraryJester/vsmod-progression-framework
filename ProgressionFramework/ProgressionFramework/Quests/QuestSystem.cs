@@ -533,11 +533,13 @@ public class QuestSystem : ModSystem
 
     private bool AllObjectivesComplete(IServerPlayer player, Quest quest)
     {
+        int required = quest.RequiredObjectiveCount ?? quest.Objectives.Count;
+        int done = 0;
         foreach (var obj in quest.Objectives)
         {
-            if (!IsObjectiveComplete(player, quest.Code, obj.Code)) return false;
+            if (IsObjectiveComplete(player, quest.Code, obj.Code)) done++;
         }
-        return true;
+        return done >= required;
     }
 
     // -----------------------------------------------------------------
