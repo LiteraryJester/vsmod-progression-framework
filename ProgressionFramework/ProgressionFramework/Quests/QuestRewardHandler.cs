@@ -175,14 +175,22 @@ internal static class BuiltInObjectiveHandlers
             var qs = player.Entity.Api.ModLoader.GetModSystem<QuestSystem>();
             int baseline = ctx.ObjTree.GetInt("baseline");
             int current = qs.GetKillCount(objective.Pattern);
-            int newProgress = Math.Max(0, current - baseline);
+            int newProgress = Math.Min(objective.Required, Math.Max(0, current - baseline));
 
             int oldProgress = ctx.ObjTree.GetInt("progress");
-            if (newProgress == oldProgress) return false;
+            bool changed = newProgress != oldProgress;
+            // OnEntityDeath also advances progress live, so by the time the player
+            // turns in, the count may already be at the threshold with no further
+            // delta to record. Still return true so TryDeliver can complete the
+            // objective and apply rewards.
+            if (!changed && newProgress < objective.Required) return false;
 
-            ctx.ObjTree.SetInt("progress", newProgress);
-            ctx.Api.Logger.Notification("[Quest] Kill: {0} progress {1}/{2} (pattern {3})",
-                player.PlayerName, newProgress, objective.Required, objective.Pattern);
+            if (changed)
+            {
+                ctx.ObjTree.SetInt("progress", newProgress);
+                ctx.Api.Logger.Notification("[Quest] Kill: {0} progress {1}/{2} (pattern {3})",
+                    player.PlayerName, newProgress, objective.Required, objective.Pattern);
+            }
             return true;
         }
     }

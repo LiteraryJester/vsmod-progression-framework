@@ -21,7 +21,9 @@ internal static class LedgerQuestLogTab
         GuiComposer composer,
         double width,
         ref double y,
-        Dictionary<string, float[]> barValues)
+        Dictionary<string, float[]> barValues,
+        HashSet<string> collapsedQuests,
+        Action<string> onToggleCollapse)
     {
         var player = capi.World.Player;
 
@@ -55,9 +57,12 @@ internal static class LedgerQuestLogTab
 
         foreach (var group in grouped)
         {
+            // Richtext (not static text) so the group header scrolls with the rest
+            // of the list — static elements render into a shared cached bitmap
+            // that's not repositioned when the parent bounds shift on scroll.
             var headerFont = CairoFont.WhiteSmallishText().WithColor(new double[] { 0.85, 0.80, 0.60, 1.0 });
             var headerBounds = ElementBounds.Fixed(0, y, width, 24);
-            composer.AddStaticText(group.Key, headerFont, headerBounds);
+            composer.AddRichtext(group.Key, headerFont, headerBounds);
             y += 28;
 
             var sorted = group
@@ -67,7 +72,8 @@ internal static class LedgerQuestLogTab
             foreach (var (quest, status, _) in sorted)
             {
                 ComposeQuestEntry(capi, quests, player, quest, status,
-                    composer, width, ref y, barValues);
+                    composer, width, ref y, barValues,
+                    collapsedQuests, onToggleCollapse);
             }
 
             y += 12;
@@ -78,24 +84,46 @@ internal static class LedgerQuestLogTab
         ICoreClientAPI capi, QuestSystem quests, IPlayer player,
         Quest quest, QuestStatus status,
         GuiComposer composer, double width, ref double y,
-        Dictionary<string, float[]> barValues)
+        Dictionary<string, float[]> barValues,
+        HashSet<string> collapsedQuests, Action<string> onToggleCollapse)
     {
+        bool collapsed = collapsedQuests.Contains(quest.Code);
         string title = ResolveTitle(quest);
+        // ★ works in VS's default font; ✓ (\u2713) renders as a missing-glyph box,
+        // so match the training tab's "completed" visual (gold star).
         string statusLabel = status == QuestStatus.Completed
-            ? "\u2713 " + Lang.Get("progressionframework:questlog-status-completed")
+            ? "\u2605 " + Lang.Get("progressionframework:questlog-status-completed")
             : Lang.Get("progressionframework:questlog-status-active");
         string statusColor = status == QuestStatus.Completed ? "#D4AF37" : "#C0C0C0";
 
+        // ASCII +/- for the collapse toggle — triangles (▶▼) aren't in the default
+        // button font and render as empty boxes. Plain glyphs avoid any font-dependency.
+        var toggleBounds = ElementBounds.Fixed(12, y + 1, 20, 20);
+        string toggleLabel = collapsed ? "+" : "-";
+        string questCode = quest.Code;
+        composer.AddSmallButton(
+            toggleLabel,
+            () => { onToggleCollapse(questCode); return true; },
+            toggleBounds,
+            EnumButtonStyle.Small,
+            "questlog-toggle-" + SanitizeKey(quest.Code));
+
         string titleLine = $"<strong>{title}</strong>   <font color=\"{statusColor}\">{statusLabel}</font>";
-        var titleBounds = ElementBounds.Fixed(12, y, width - 24, 22);
+        var titleBounds = ElementBounds.Fixed(36, y, width - 48, 22);
         composer.AddRichtext(titleLine, CairoFont.WhiteSmallText(), titleBounds);
-        y += 22;
+        y += 24;
+
+        if (collapsed)
+        {
+            y += 4;
+            return;
+        }
 
         if (quest.Scope == QuestScope.Server)
         {
             var subtitleFont = CairoFont.WhiteDetailText().WithFontSize(10);
-            var subtitleBounds = ElementBounds.Fixed(24, y, width - 36, 14);
-            composer.AddStaticText(
+            var subtitleBounds = ElementBounds.Fixed(36, y, width - 48, 14);
+            composer.AddRichtext(
                 Lang.Get("progressionframework:questlog-shared-subtitle"),
                 subtitleFont, subtitleBounds);
             y += 16;
@@ -104,7 +132,7 @@ internal static class LedgerQuestLogTab
         if (!string.IsNullOrEmpty(quest.DescriptionLangKey))
         {
             var descFont = CairoFont.WhiteDetailText();
-            var descBounds = ElementBounds.Fixed(24, y, width - 36, 36);
+            var descBounds = ElementBounds.Fixed(36, y, width - 48, 36);
             composer.AddRichtext(Lang.Get(quest.DescriptionLangKey), descFont, descBounds);
             y += 40;
         }
@@ -116,6 +144,10 @@ internal static class LedgerQuestLogTab
 
         y += 6;
     }
+
+    /// <summary>Quest codes contain <c>:</c> (domain prefix) which GuiComposer
+    /// rejects in element keys. Replace with <c>-</c> so button lookups work.</summary>
+    private static string SanitizeKey(string code) => code.Replace(':', '-');
 
     private static void ComposeObjective(
         ICoreClientAPI capi, QuestSystem quests, IPlayer player,
@@ -154,7 +186,7 @@ internal static class LedgerQuestLogTab
         string header = $"{title}{modifiers} {progress} of {required}";
 
         var headerBounds = ElementBounds.Fixed(36, y, width - 48, 18);
-        composer.AddStaticText("• " + header, CairoFont.WhiteDetailText(), headerBounds);
+        composer.AddRichtext("• " + header, CairoFont.WhiteDetailText(), headerBounds);
         y += 20;
 
         var barBounds = ElementBounds.Fixed(48, y, width - 64, 10);

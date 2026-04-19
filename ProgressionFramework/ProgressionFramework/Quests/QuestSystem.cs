@@ -103,16 +103,21 @@ public class QuestSystem : ModSystem
     }
 
     /// <summary>Increments the per-pattern global kill counter for any loaded
-    /// kill-objective pattern matched by the dying entity's code. Runs on every
-    /// entity death server-side; short-circuits if no kill patterns are loaded.</summary>
+    /// kill-objective pattern matched by the dying entity's code, then pushes
+    /// the new count into per-player progress for any online player whose
+    /// active quest is tracking that pattern so the quest log GUI updates live
+    /// without requiring a visit to the NPC. Quest completion still runs
+    /// through the dialog turn-in (TryDeliver) so reward delivery stays tied
+    /// to the NPC interaction.</summary>
     private void OnEntityDeath(Entity entity, DamageSource damageSource)
     {
         if (entity == null || killPatterns.Count == 0) return;
+        if (sapi == null) return;
 
         string code = entity.Code?.ToString() ?? "";
         if (string.IsNullOrEmpty(code)) return;
 
-        var varSys = sapi?.ModLoader.GetModSystem<VariablesModSystem>();
+        var varSys = sapi.ModLoader.GetModSystem<VariablesModSystem>();
         if (varSys?.VarData == null) return;
 
         foreach (var pattern in killPatterns)
@@ -124,12 +129,60 @@ public class QuestSystem : ModSystem
             int current = int.TryParse(currentStr, out int n) ? n : 0;
             int next = current + 1;
             varSys.SetVariable(null, EnumActivityVariableScope.Global, varName, next.ToString());
+
+            AdvanceLiveKillProgress(pattern, next);
+        }
+    }
+
+    /// <summary>For each online player with an active quest whose kill
+    /// objective uses <paramref name="pattern"/>, recompute progress from the
+    /// new global counter and write it into their per-player tree. Caps
+    /// progress at the objective requirement so the GUI shows N/N rather than
+    /// e.g. 12/10. Skips already-completed objectives.</summary>
+    private void AdvanceLiveKillProgress(string pattern, int currentCount)
+    {
+        if (sapi == null) return;
+
+        foreach (var quest in QuestsByCode.Values)
+        {
+            QuestObjective? matched = null;
+            foreach (var obj in quest.Objectives)
+            {
+                if (obj.Type.Equals("kill", StringComparison.OrdinalIgnoreCase)
+                    && obj.Pattern == pattern)
+                {
+                    matched = obj;
+                    break;
+                }
+            }
+            if (matched == null) continue;
+            if (quest.Scope != QuestScope.Player) continue;
+
+            foreach (var p in sapi.World.AllOnlinePlayers)
+            {
+                if (p is not IServerPlayer player) continue;
+                if (GetStatus(player, quest.Code) != QuestStatus.Active) continue;
+                if (IsObjectiveComplete(player, quest.Code, matched.Code)) continue;
+
+                var objTree = GetOrAddObjectiveTree(player, quest, matched.Code);
+                int baseline = objTree.GetInt("baseline");
+                int newProgress = Math.Min(matched.Required, Math.Max(0, currentCount - baseline));
+                int oldProgress = objTree.GetInt("progress");
+                if (newProgress == oldProgress) continue;
+
+                objTree.SetInt("progress", newProgress);
+                MarkDirty(player, quest);
+                SyncFlat(player, quest);
+            }
         }
     }
 
     private void OnPlayerNowPlayingSendSnapshot(IServerPlayer player)
     {
         if (sapi == null) return;
+
+        CatchUpKillProgressOnJoin(player);
+
         var channel = sapi.Network.GetChannel("progressionframework:questsync");
         if (channel == null) return;
 
@@ -139,6 +192,40 @@ public class QuestSystem : ModSystem
             msg.States[code] = SerializeTree(tree);
         }
         channel.SendPacket(msg, player);
+    }
+
+    /// <summary>Recomputes per-player kill-objective progress against the
+    /// current global counter for every active player-scope kill quest the
+    /// joining player has, so kills that landed while they were offline (other
+    /// players sharing the counter) are reflected in their log immediately
+    /// without waiting for the next kill or NPC turn-in.</summary>
+    private void CatchUpKillProgressOnJoin(IServerPlayer player)
+    {
+        if (sapi == null) return;
+
+        foreach (var quest in QuestsByCode.Values)
+        {
+            if (quest.Scope != QuestScope.Player) continue;
+            if (GetStatus(player, quest.Code) != QuestStatus.Active) continue;
+
+            foreach (var obj in quest.Objectives)
+            {
+                if (!obj.Type.Equals("kill", StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.IsNullOrEmpty(obj.Pattern)) continue;
+                if (IsObjectiveComplete(player, quest.Code, obj.Code)) continue;
+
+                int current = GetKillCount(obj.Pattern);
+                var objTree = GetOrAddObjectiveTree(player, quest, obj.Code);
+                int baseline = objTree.GetInt("baseline");
+                int newProgress = Math.Min(obj.Required, Math.Max(0, current - baseline));
+                int oldProgress = objTree.GetInt("progress");
+                if (newProgress == oldProgress) continue;
+
+                objTree.SetInt("progress", newProgress);
+                MarkDirty(player, quest);
+                SyncFlat(player, quest);
+            }
+        }
     }
 
     /// <summary>Broadcast an updated server-quest tree to all connected players.
@@ -508,9 +595,14 @@ public class QuestSystem : ModSystem
             return false;
         }
         var status = GetStatus(player, questCode);
-        if (status != QuestStatus.Active)
+        // Completed quests still accept deliveries. Quests using RequiredObjectiveCount
+        // flip to Completed partway through the objective list (e.g. 6 of 17 plantation
+        // seeds), granting the quest-level reward early; players should still be able
+        // to turn in the remaining objectives for their per-objective rewards without
+        // the framework locking them out.
+        if (status != QuestStatus.Active && status != QuestStatus.Completed)
         {
-            api?.Logger.Warning("[Quest] TryDeliver: quest '{0}' is {1}, not active", questCode, status);
+            api?.Logger.Warning("[Quest] TryDeliver: quest '{0}' is {1}, not deliverable", questCode, status);
             return false;
         }
 
@@ -672,8 +764,12 @@ public class QuestSystem : ModSystem
             string baselineVar = $"quest-{CodeToVarName(quest.Code)}-{objectiveCode}-baseline";
             int baseline = ReadFlatInt(varSys, playerEntity, quest, baselineVar);
 
-            newProgress = Math.Max(0, globalCount - baseline);
-            if (newProgress == currentProgress) return;
+            newProgress = Math.Min(objective.Required, Math.Max(0, globalCount - baseline));
+            // No early return when newProgress == currentProgress: live kill
+            // tracking may have already brought the client up to the threshold,
+            // and we still need to flip the per-objective and quest status flat
+            // vars to "completed" below so the next condition node in the
+            // dialog graph (which reads from this same VarData) sees it.
         }
         else
         {

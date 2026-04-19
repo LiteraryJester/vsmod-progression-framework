@@ -19,6 +19,12 @@ public class GuiDialogLedger : GuiDialog
 
     private LedgerTab currentTab = LedgerTab.Training;
 
+    private const double QuestLogViewportHeight = 520;
+    private readonly HashSet<string> collapsedQuests = new();
+    private bool defaultsApplied;
+    private ElementBounds? questLogContentBounds;
+    private double questLogContentHeight;
+
     public override string ToggleKeyCombinationCode => "progressionframeworkledger";
     public override bool PrefersUngrabbedMouse => false;
 
@@ -59,6 +65,7 @@ public class GuiDialogLedger : GuiDialog
     private void ComposeDialog()
     {
         barValues.Clear();
+        ApplyDefaultCollapseState();
         const double width = 520;
 
         var bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
@@ -111,6 +118,19 @@ public class GuiDialogLedger : GuiDialog
         {
             var bar = SingleComposer.GetStatbar(kv.Key);
             if (bar != null) bar.SetValues(kv.Value[0], kv.Value[1], kv.Value[2]);
+        }
+
+        if (currentTab == LedgerTab.QuestLog)
+        {
+            var scrollbar = SingleComposer.GetScrollbar("questlog-scrollbar");
+            if (scrollbar != null)
+            {
+                scrollbar.SetHeights((float)QuestLogViewportHeight, (float)questLogContentHeight);
+                // Reset scroll to top on each recompose — collapse/expand shifts content
+                // enough that preserving position would land the user in an unrelated spot.
+                scrollbar.CurrentYPosition = 0;
+                OnQuestLogScroll(0);
+            }
         }
     }
 
@@ -193,11 +213,75 @@ public class GuiDialogLedger : GuiDialog
         }
     }
 
-    // ------- Quest Log tab (placeholder — filled in Task 5) -------
+    // ------- Quest Log tab -------
 
     private void ComposeQuestLogTab(GuiComposer composer, double width, ref double y)
     {
-        LedgerQuestLogTab.Compose(capi, quests, composer, width, ref y, barValues);
+        const double scrollbarWidth = 20;
+        const double gapBetweenViewportAndScrollbar = 3;
+        double contentWidth = width - scrollbarWidth - gapBetweenViewportAndScrollbar;
+
+        var clipBounds = ElementBounds.Fixed(0, y, contentWidth, QuestLogViewportHeight);
+        var insetBounds = clipBounds.FlatCopy().FixedGrow(6).WithFixedOffset(-3, -3);
+        var scrollbarBounds = ElementBounds.Fixed(
+            contentWidth + gapBetweenViewportAndScrollbar, y,
+            scrollbarWidth, QuestLogViewportHeight);
+
+        questLogContentBounds = ElementBounds.Fixed(0, 0, contentWidth, 1);
+
+        composer.AddInset(insetBounds, 3);
+
+        composer
+            .BeginClip(clipBounds)
+                .BeginChildElements(questLogContentBounds);
+
+        double contentY = 0;
+        LedgerQuestLogTab.Compose(
+            capi, quests, composer, contentWidth, ref contentY,
+            barValues, collapsedQuests, OnToggleQuestCollapse);
+        questLogContentHeight = contentY;
+
+        // Give the content bounds a real height so ForkBoundingParent/layout can
+        // work if anything queries it later.
+        questLogContentBounds.fixedHeight = questLogContentHeight;
+
+        composer
+                .EndChildElements()
+            .EndClip()
+            .AddVerticalScrollbar(OnQuestLogScroll, scrollbarBounds, "questlog-scrollbar");
+
+        y += QuestLogViewportHeight + 10;
+    }
+
+    private void OnQuestLogScroll(float value)
+    {
+        if (questLogContentBounds == null) return;
+        questLogContentBounds.fixedY = -value;
+        questLogContentBounds.CalcWorldBounds();
+    }
+
+    private void OnToggleQuestCollapse(string questCode)
+    {
+        if (!collapsedQuests.Add(questCode)) collapsedQuests.Remove(questCode);
+        ComposeDialog();
+    }
+
+    /// <summary>Collapse completed quests by default on first open — they clutter
+    /// the active view and users rarely need to re-expand them. Runs exactly once
+    /// per dialog lifetime; user overrides (expanding) persist for that lifetime.</summary>
+    private void ApplyDefaultCollapseState()
+    {
+        if (defaultsApplied) return;
+        defaultsApplied = true;
+
+        var player = capi.World.Player;
+        foreach (var quest in quests.QuestsByCode.Values)
+        {
+            if (quests.GetStatus(player, quest.Code) == QuestStatus.Completed)
+            {
+                collapsedQuests.Add(quest.Code);
+            }
+        }
     }
 
     // ------- Training tab helpers -------
