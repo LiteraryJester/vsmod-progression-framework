@@ -1,0 +1,139 @@
+<div style="max-width: 820px; margin: 0 auto; font-family: sans-serif; line-height: 1.6;">
+
+  <h2 style="text-align: center; margin-bottom: 0.25em;"><strong>Quests, training, and evolving traders for Vintage Story modders.</strong></h2>
+  <p style="text-align: center; font-size: 1.05em;"><strong>Progression Framework</strong> is a content-empty mod that provides three reusable systems for other mods to build on: a quest engine, a training/profession engine, and an evolving-trader engine. Drop JSON into your mod's asset folders and the framework discovers it at load time.</p>
+  <p style="text-align: center;">Current release : <strong>v1.0.0</strong> (Vintage Story 1.22.0-rc.7+).</p>
+
+  <hr style="border: none; border-top: 1px solid #555; margin: 1.5em 0;" />
+
+  <h3>&#10024; For Players</h3>
+  <p>This mod adds nothing on its own &mdash; install it because a content mod requires it. Currently shipped by: <a href="https://mods.vintagestory.at/seafarer">Seafarer</a>.</p>
+  <h4>What it gives you in-game</h4>
+  <ul>
+    <li><strong>Training Ledger (L)</strong> &mdash; A tabbed dialog showing your training progress and active quests.</li>
+    <li><strong>Quest log</strong> &mdash; Quests track automatically as you talk to NPCs and turn in items.</li>
+    <li><strong>Evolving traders</strong> &mdash; NPC stock and dialogue change as you complete work for them.</li>
+  </ul>
+
+  <hr style="border: none; border-top: 1px solid #555; margin: 1.5em 0;" />
+
+  <h3>&#129513; For Modders &mdash; Overview</h3>
+  <p>The framework scans every loaded mod domain for content at <code>AssetsFinalize</code>. Drop JSON into the conventional paths below and you have working content.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Subsystem</th>
+        <th>Path</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Quests</td>
+        <td><code>&lt;yourmod&gt;:config/quests/*.json</code></td>
+        <td>First-loaded wins on collisions.</td>
+      </tr>
+      <tr>
+        <td>Training</td>
+        <td><code>&lt;yourmod&gt;:config/training/*.json</code></td>
+        <td>Recognised filenames: <code>professions.json</code>, <code>xp.json</code>, <code>config.json</code>.</td>
+      </tr>
+      <tr>
+        <td>Tradelists</td>
+        <td><code>&lt;yourmod&gt;:config/tradelists/*.json</code></td>
+        <td>Looked up by stem from <code>EntityEvolvingTrader</code> JSONs.</td>
+      </tr>
+      <tr>
+        <td>Dialogue</td>
+        <td>base-game NPC conversation system</td>
+        <td>Quests subscribe to dialogue triggers.</td>
+      </tr>
+    </tbody>
+  </table>
+  <h4>Registered identifiers</h4>
+  <p>These names are stable for cross-mod use: entity class <code>EntityEvolvingTrader</code>, item class <code>ItemTrainingBook</code>, hotkey <code>progressionframeworkledger</code>, network channel <code>progressionframework:questsync</code>, Harmony id <code>progressionframework</code>.</p>
+
+  <hr style="border: none; border-top: 1px solid #555; margin: 1.5em 0;" />
+
+  <h3>&#128203; Adding a Quest</h3>
+  <p>Save a JSON file under your mod's <code>config/quests/</code>. The <code>code</code> is its identifier; <code>npc</code> is the entity code that gives it. <code>delivery</code> objectives count items the player turns in to that NPC; rewards fire when the threshold is hit.</p>
+  <pre style="background: #1e1e1e; color: #d4d4d4; padding: 0.75em 1em; overflow-x: auto; border-radius: 4px;"><code>{
+  "code": "harvest-help",
+  "npc": "mymod:trader-farmer",
+  "scope": "server",
+  "autoEnable": true,
+  "objectives": [{
+    "code": "deliver-wheat",
+    "type": "delivery",
+    "items": [{ "item": "game:grain-spelt", "quantity": 1 }],
+    "required": 32,
+    "rewards": [{ "type": "addSellingItem", "itemCode": "game:scythe-copper", "itemType": "item", "stacksize": 1, "stockAvg": 1, "stockVar": 0, "priceAvg": 8, "priceVar": 1 }]
+  }]
+}</code></pre>
+  <p>Quest titles, descriptions, and group names go through your mod's <code>lang/en.json</code> using the <code>titleLangKey</code>, <code>descriptionLangKey</code>, and <code>groupLangKey</code> fields.</p>
+
+  <hr style="border: none; border-top: 1px solid #555; margin: 1.5em 0;" />
+
+  <h3>&#127891; Adding Training</h3>
+  <p>A <strong>profession</strong> contains one or more <strong>trainings</strong>; each training has <strong>levels</strong>; each level grants a <strong>trait</strong>. Save the list at <code>config/training/professions.json</code>.</p>
+  <pre style="background: #1e1e1e; color: #d4d4d4; padding: 0.75em 1em; overflow-x: auto; border-radius: 4px;"><code>[
+  {
+    "code": "gardening",
+    "color": "#4F7F3C",
+    "trainings": [{
+      "code": "gardener",
+      "levels": [{ "level": 1, "xp": 100, "title": "Gardener", "trait": "green-thumb" }]
+    }]
+  }
+]</code></pre>
+  <p>XP sources go in <code>config/training/xp.json</code>. The <code>craft</code> kind grants XP whenever a matching grid recipe completes; <code>book</code> when an <code>ItemTrainingBook</code> is read; <code>dialogue</code> when a registered dialogue trigger fires.</p>
+  <pre style="background: #1e1e1e; color: #d4d4d4; padding: 0.75em 1em; overflow-x: auto; border-radius: 4px;"><code>[
+  { "type": "craft", "training": "gardener", "recipe": "mymod:flowerpot-*", "xp": 5 },
+  { "type": "book",  "training": "gardener", "item": "mymod:trainingbook-gardener", "xp": 100 }
+]</code></pre>
+
+  <hr style="border: none; border-top: 1px solid #555; margin: 1.5em 0;" />
+
+  <h3>&#128274; Gating a Recipe with a Crafting Trait</h3>
+  <p>Once a training level grants a trait (<code>green-thumb</code> in the example above), any grid recipe variant with <code>requiresTrait: "green-thumb"</code> only matches when the player has earned that trait. A common pattern is to ship <strong>two variants</strong> &mdash; one ungated with extra ingredients (so untrained players can still build it the hard way), one trait-gated with a simpler ingredient list.</p>
+  <pre style="background: #1e1e1e; color: #d4d4d4; padding: 0.75em 1em; overflow-x: auto; border-radius: 4px;"><code>[
+  {
+    "ingredientPattern": "S,F,R",
+    "ingredients": {
+      "S": { "type": "item", "code": "mymod:schematic-greenhouse" },
+      "F": { "type": "item", "code": "game:firewood",   "quantity": 5 },
+      "R": { "type": "item", "code": "game:rope",       "quantity": 4 }
+    },
+    "width": 1, "height": 3, "shapeless": true,
+    "output": { "type": "block", "code": "mymod:greenhouse-frame", "quantity": 1 }
+  },
+  {
+    "requiresTrait": "green-thumb",
+    "ingredientPattern": "F,R",
+    "ingredients": {
+      "F": { "type": "item", "code": "game:firewood", "quantity": 5 },
+      "R": { "type": "item", "code": "game:rope",     "quantity": 4 }
+    },
+    "width": 1, "height": 2, "shapeless": true,
+    "output": { "type": "block", "code": "mymod:greenhouse-frame", "quantity": 1 }
+  }
+]</code></pre>
+  <p><code>requiresTrait</code> is a base-game <code>GridRecipe</code> field, not a Progression Framework one &mdash; the framework's contribution is granting the trait via training so the recipe gate fires.</p>
+
+  <hr style="border: none; border-top: 1px solid #555; margin: 1.5em 0;" />
+
+  <h3>&#128736; Built-in Handlers</h3>
+  <ul>
+    <li><strong>Quest objective types</strong> &mdash; <code>delivery</code>, <code>kill</code>.</li>
+    <li><strong>Quest reward types</strong> &mdash; <code>addSellingItem</code>, <code>giveItem</code>, <code>awardTrainingXP</code>, <code>incrementEntityVariable</code>.</li>
+    <li><strong>XP source kinds</strong> &mdash; <code>craft</code>, <code>dialogue</code>, <code>book</code>.</li>
+  </ul>
+  <p>Need something custom? Register your own handler from C# in your mod's <code>Start()</code>: <code>questSystem.RegisterObjectiveType("fetch", new MyFetchHandler());</code>. Implement <code>IQuestObjectiveHandler</code>, <code>IQuestRewardHandler</code>, or <code>IXpSourceHandler</code>.</p>
+
+  <hr style="border: none; border-top: 1px solid #555; margin: 1.5em 0;" />
+
+  <h3>&#128295; Compatibility &amp; Requirements</h3>
+  <p><strong>Required:</strong> Vintage Story 1.22.0-rc.7 or newer.</p>
+  <p><strong>Known incompatibilities:</strong> none reported.</p>
+
+</div>
