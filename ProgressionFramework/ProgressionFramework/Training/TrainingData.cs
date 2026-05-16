@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 namespace ProgressionFramework.Training;
 
@@ -13,12 +14,22 @@ public class Profession
     public string Code { get; set; } = "";
     public string Color { get; set; } = "#C8B691";
     public List<Training> Trainings { get; set; } = new();
+
+    /// <summary>Asset domain this profession was loaded from (the consuming mod's modid).
+    /// Set at load time, not from JSON. Used to resolve display-name lang keys in the
+    /// owning mod's domain.</summary>
+    [JsonIgnore]
+    public string Domain { get; set; } = "game";
 }
 
 public class Training
 {
     public string Code { get; set; } = "";
     public List<TrainingLevel> Levels { get; set; } = new();
+
+    /// <summary>Asset domain this training was loaded from. Set at load time, not from JSON.</summary>
+    [JsonIgnore]
+    public string Domain { get; set; } = "game";
 }
 
 public class TrainingLevel
