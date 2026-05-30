@@ -878,6 +878,23 @@ public class QuestSystem : ModSystem
     // Inventory helpers
     // -----------------------------------------------------------------
 
+    /// <summary>
+    /// True if <paramref name="code"/> matches the requirement's
+    /// <see cref="QuestItemRequirement.Item"/> or any entry in
+    /// <see cref="QuestItemRequirement.Alternates"/>. Each pattern is matched
+    /// via <see cref="WildcardUtil.Match(string, string)"/>, which falls
+    /// through to equality on non-wildcard inputs — so exact codes still
+    /// behave like the legacy single-code matcher.
+    /// </summary>
+    internal static bool RequirementMatches(AssetLocation code, QuestItemRequirement req)
+    {
+        string codeStr = code.ToString();
+        if (WildcardUtil.Match(req.Item, codeStr)) return true;
+        foreach (var alt in req.Alternates)
+            if (WildcardUtil.Match(alt, codeStr)) return true;
+        return false;
+    }
+
     private static int CountInInventory(IServerPlayer player, string itemCode)
     {
         int count = 0;
