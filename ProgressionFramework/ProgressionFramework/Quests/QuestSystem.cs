@@ -931,6 +931,44 @@ public class QuestSystem : ModSystem
         });
     }
 
+    /// <summary>Sums the stack sizes of every inventory slot whose item code
+    /// matches <paramref name="req"/> (the requirement's <see cref="QuestItemRequirement.Item"/>
+    /// or any of its <see cref="QuestItemRequirement.Alternates"/>). Hotbar + backpacks +
+    /// cursor are all walked.</summary>
+    private static int CountInInventory(IServerPlayer player, QuestItemRequirement req)
+    {
+        int count = 0;
+        player.Entity.WalkInventory(slot =>
+        {
+            var code = slot?.Itemstack?.Collectible?.Code;
+            if (code != null && RequirementMatches(code, req))
+                count += slot.Itemstack.StackSize;
+            return true;
+        });
+        return count;
+    }
+
+    /// <summary>Consumes up to <paramref name="quantity"/> items from the player's
+    /// inventory whose code matches <paramref name="req"/>. Slots are visited in
+    /// the standard walk order (hotbar → backpacks → cursor); whichever matching
+    /// stack the walk reaches first is drawn from first. No preference between
+    /// <see cref="QuestItemRequirement.Item"/> and <see cref="QuestItemRequirement.Alternates"/>.</summary>
+    private static void TakeFromInventory(IServerPlayer player, QuestItemRequirement req, int quantity)
+    {
+        int remaining = quantity;
+        player.Entity.WalkInventory(slot =>
+        {
+            if (remaining <= 0) return false;
+            var code = slot?.Itemstack?.Collectible?.Code;
+            if (code == null || !RequirementMatches(code, req)) return true;
+            int take = Math.Min(slot.Itemstack.StackSize, remaining);
+            slot.TakeOut(take);
+            slot.MarkDirty();
+            remaining -= take;
+            return remaining > 0;
+        });
+    }
+
     // -----------------------------------------------------------------
     // State tree helpers — scope-aware
     // -----------------------------------------------------------------
