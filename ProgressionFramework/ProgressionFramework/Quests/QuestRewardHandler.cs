@@ -203,7 +203,22 @@ public sealed class QuestProgressContext
 {
     public ICoreServerAPI Api { get; init; } = null!;
     public ITreeAttribute ObjTree { get; init; } = null!;
+
+    // Legacy single-code helpers — kept so existing third-party objective
+    // handlers that read these delegates keep compiling. New code (including
+    // built-in Delivery) should prefer CountReq / TakeReq below, which honor
+    // alternates and wildcards.
     public System.Func<IServerPlayer, string, int> CountInInventory { get; init; } = null!;
     public System.Action<IServerPlayer, string, int> TakeFromInventory { get; init; } = null!;
+
+    /// <summary>Alternates-aware counterpart of <see cref="CountInInventory"/>.
+    /// Sums inventory stacks matching the requirement's primary code OR any of
+    /// its <c>Alternates</c> (each may be a VS wildcard pattern).</summary>
+    public System.Func<IServerPlayer, QuestItemRequirement, int> CountReq { get; init; } = null!;
+
+    /// <summary>Alternates-aware counterpart of <see cref="TakeFromInventory"/>.
+    /// Consumes up to <c>quantity</c> matching items in inventory walk order.</summary>
+    public System.Action<IServerPlayer, QuestItemRequirement, int> TakeReq { get; init; } = null!;
+
     public Entity Npc { get; init; } = null!;
 }

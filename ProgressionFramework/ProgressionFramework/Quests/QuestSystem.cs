@@ -631,6 +631,8 @@ public class QuestSystem : ModSystem
             ObjTree = objTree,
             CountInInventory = CountInInventory,
             TakeFromInventory = TakeFromInventory,
+            CountReq = CountInInventory,
+            TakeReq = TakeFromInventory,
             Npc = npc
         };
 
