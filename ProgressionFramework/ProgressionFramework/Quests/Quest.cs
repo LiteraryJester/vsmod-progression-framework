@@ -41,6 +41,14 @@ public class QuestItemRequirement
 {
     public string Item { get; set; } = "";
     public int Quantity { get; set; } = 1;
+
+    /// <summary>Additional item codes accepted in place of <see cref="Item"/>.
+    /// Each entry may be an exact code or a VS wildcard pattern (e.g.
+    /// <c>"*:seeds-potato"</c>, <c>"game:plank-*"</c>). At turn-in time the
+    /// player's inventory is searched for any item whose code matches
+    /// <see cref="Item"/> OR any entry here. Empty by default — existing
+    /// single-code quests behave exactly as before.</summary>
+    public List<string> Alternates { get; set; } = new();
 }
 
 /// <summary>
