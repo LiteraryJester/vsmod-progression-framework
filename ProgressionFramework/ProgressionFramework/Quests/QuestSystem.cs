@@ -940,8 +940,7 @@ public class QuestSystem : ModSystem
         int count = 0;
         player.Entity.WalkInventory(slot =>
         {
-            var code = slot?.Itemstack?.Collectible?.Code;
-            if (code != null && RequirementMatches(code, req))
+            if (slot?.Itemstack?.Collectible?.Code is { } code && RequirementMatches(code, req))
                 count += slot.Itemstack.StackSize;
             return true;
         });
@@ -959,8 +958,7 @@ public class QuestSystem : ModSystem
         player.Entity.WalkInventory(slot =>
         {
             if (remaining <= 0) return false;
-            var code = slot?.Itemstack?.Collectible?.Code;
-            if (code == null || !RequirementMatches(code, req)) return true;
+            if (slot?.Itemstack?.Collectible?.Code is not { } code || !RequirementMatches(code, req)) return true;
             int take = Math.Min(slot.Itemstack.StackSize, remaining);
             slot.TakeOut(take);
             slot.MarkDirty();
