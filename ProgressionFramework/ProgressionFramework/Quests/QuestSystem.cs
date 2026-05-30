@@ -744,7 +744,7 @@ public class QuestSystem : ModSystem
             foreach (var req in objective.Items)
             {
                 if (req.Quantity <= 0) continue;
-                int have = CountInInventoryEntity(playerEntity, req.Item);
+                int have = CountInInventoryEntity(playerEntity, req);
                 int canDo = have / req.Quantity;
                 if (canDo < maxTurnIns) maxTurnIns = canDo;
             }
@@ -806,13 +806,17 @@ public class QuestSystem : ModSystem
         }
     }
 
-    private static int CountInInventoryEntity(EntityPlayer playerEntity, string itemCode)
+    /// <summary>Client-side companion of <see cref="CountInInventory(IServerPlayer, QuestItemRequirement)"/>.
+    /// Used by <see cref="MirrorDeliveryOnClient"/> to predict turn-in count
+    /// before the server broadcast arrives, so subsequent dialog conditions in
+    /// the same frame see a correct flat-variable value.</summary>
+    private static int CountInInventoryEntity(EntityPlayer playerEntity, QuestItemRequirement req)
     {
         int count = 0;
-        var loc = new AssetLocation(itemCode);
         playerEntity.WalkInventory(slot =>
         {
-            if (slot?.Itemstack?.Collectible?.Code == loc) count += slot.Itemstack.StackSize;
+            if (slot?.Itemstack?.Collectible?.Code is { } code && RequirementMatches(code, req))
+                count += slot.Itemstack.StackSize;
             return true;
         });
         return count;
