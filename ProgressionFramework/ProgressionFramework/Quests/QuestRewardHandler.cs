@@ -120,7 +120,7 @@ internal static class BuiltInObjectiveHandlers
             foreach (var req in objective.Items)
             {
                 if (req.Quantity <= 0) continue;
-                int have = ctx.CountInInventory(player, req.Item);
+                int have = ctx.CountReq(player, req);
                 int canDo = have / req.Quantity;
                 if (canDo < maxTurnIns) maxTurnIns = canDo;
             }
@@ -135,7 +135,7 @@ internal static class BuiltInObjectiveHandlers
 
             foreach (var req in objective.Items)
             {
-                ctx.TakeFromInventory(player, req.Item, req.Quantity * turnIns);
+                ctx.TakeReq(player, req, req.Quantity * turnIns);
             }
 
             int progress = currentProgress + turnIns;
