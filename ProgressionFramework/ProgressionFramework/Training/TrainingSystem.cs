@@ -80,7 +80,7 @@ public class TrainingSystem : ModSystem
                     // Bare array — treat filename as hint
                     if (fileName.Equals("professions.json", StringComparison.OrdinalIgnoreCase))
                     {
-                        Professions.AddRange(arr.ToObject<List<Profession>>() ?? new());
+                        AddProfessions(arr.ToObject<List<Profession>>(), asset.Location.Domain);
                     }
                     else
                     {
@@ -91,7 +91,7 @@ public class TrainingSystem : ModSystem
                 else if (token is JObject obj)
                 {
                     if (obj["professions"] is JArray profs)
-                        Professions.AddRange(profs.ToObject<List<Profession>>() ?? new());
+                        AddProfessions(profs.ToObject<List<Profession>>(), asset.Location.Domain);
                     if (obj["xpSources"] is JArray xps)
                         XpSources.AddRange(xps.ToObject<List<TrainingXpSource>>() ?? new());
                     if (obj["config"] is JObject cfg)
@@ -127,6 +127,22 @@ public class TrainingSystem : ModSystem
     }
 
     /// <summary>
+    /// Appends professions to the registry, stamping the source asset domain onto each
+    /// profession and its trainings so display-name lang keys resolve in the owning mod's
+    /// domain rather than a hardcoded one.
+    /// </summary>
+    private void AddProfessions(System.Collections.Generic.List<Profession>? list, string domain)
+    {
+        if (list == null) return;
+        foreach (var prof in list)
+        {
+            prof.Domain = domain;
+            foreach (var training in prof.Trainings) training.Domain = domain;
+            Professions.Add(prof);
+        }
+    }
+
+    /// <summary>
     /// Award XP to a player for a specific training. Handles level-ups and trait grants.
     /// Call from server side only.
     /// </summary>
@@ -159,9 +175,14 @@ public class TrainingSystem : ModSystem
             // Grant trait for recipe unlocks
             AddExtraTrait(player, nextLevel.Trait);
 
-            // Notify player
-            string title = Lang.Get("seafarer:training-title-" + nextLevel.Trait,
-                nextLevel.Title);
+            // Notify player. Prefer a <domain>:training-title-<trait> lang override if one
+            // exists; otherwise use the level's Title straight from the profession JSON.
+            // (Lang.Get returns the raw key, not the args, when a key is missing — so the
+            // second arg cannot serve as a fallback default.)
+            string titleKey = training.Domain + ":training-title-" + nextLevel.Trait;
+            string title = Lang.HasTranslation(titleKey, false, false)
+                ? Lang.Get(titleKey)
+                : nextLevel.Title;
             sapi?.SendMessage(player, 0,
                 Lang.Get("progressionframework:training-levelup", title),
                 EnumChatType.Notification);

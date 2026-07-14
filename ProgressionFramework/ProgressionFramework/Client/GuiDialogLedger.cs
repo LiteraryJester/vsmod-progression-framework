@@ -161,7 +161,7 @@ public class GuiDialogLedger : GuiDialog
             var profColor = HexToDoubles(prof.Color);
             var headerFont = CairoFont.WhiteSmallishText().WithColor(profColor);
             var headerBounds = ElementBounds.Fixed(0, y, width, 24);
-            string profName = Lang.Get("seafarer:profession-" + prof.Code);
+            string profName = Lang.Get(prof.Domain + ":profession-" + prof.Code);
             composer.AddStaticText(profName, headerFont, headerBounds);
             y += 28;
 
@@ -177,7 +177,7 @@ public class GuiDialogLedger : GuiDialog
                 float maxXp = nextLevel?.Xp ?? currentLevel?.Xp ?? 100;
 
                 string icon = completed ? "\u2605" : "\u25CB";
-                string trainingName = Lang.Get("seafarer:training-" + t.Code);
+                string trainingName = Lang.Get(t.Domain + ":training-" + t.Code);
                 string title = currentLevel?.Title ?? "";
                 string iconColor = completed ? "#D4AF37" : "#808080";
                 string titleColor = currentLevel?.Color ?? (completed ? "#7ACC7A" : prof.Color);

@@ -8,8 +8,8 @@
         "LiteraryJester"
     ],
     "description": "Training, quests, and evolving traders as a reusable framework for other mods.",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "dependencies": {
-        "game": "1.22.0-rc.7"
+        "game": "1.22.0"
     }
 }
