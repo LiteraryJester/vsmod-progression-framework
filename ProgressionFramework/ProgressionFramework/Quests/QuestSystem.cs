@@ -631,6 +631,8 @@ public class QuestSystem : ModSystem
             ObjTree = objTree,
             CountInInventory = CountInInventory,
             TakeFromInventory = TakeFromInventory,
+            CountReq = CountInInventory,
+            TakeReq = TakeFromInventory,
             Npc = npc
         };
 
@@ -742,7 +744,7 @@ public class QuestSystem : ModSystem
             foreach (var req in objective.Items)
             {
                 if (req.Quantity <= 0) continue;
-                int have = CountInInventoryEntity(playerEntity, req.Item);
+                int have = CountInInventoryEntity(playerEntity, req);
                 int canDo = have / req.Quantity;
                 if (canDo < maxTurnIns) maxTurnIns = canDo;
             }
@@ -804,13 +806,17 @@ public class QuestSystem : ModSystem
         }
     }
 
-    private static int CountInInventoryEntity(EntityPlayer playerEntity, string itemCode)
+    /// <summary>Client-side companion of <see cref="CountInInventory(IServerPlayer, QuestItemRequirement)"/>.
+    /// Used by <see cref="MirrorDeliveryOnClient"/> to predict turn-in count
+    /// before the server broadcast arrives, so subsequent dialog conditions in
+    /// the same frame see a correct flat-variable value.</summary>
+    private static int CountInInventoryEntity(EntityPlayer playerEntity, QuestItemRequirement req)
     {
         int count = 0;
-        var loc = new AssetLocation(itemCode);
         playerEntity.WalkInventory(slot =>
         {
-            if (slot?.Itemstack?.Collectible?.Code == loc) count += slot.Itemstack.StackSize;
+            if (slot?.Itemstack?.Collectible?.Code is { } code && RequirementMatches(code, req))
+                count += slot.Itemstack.StackSize;
             return true;
         });
         return count;
@@ -878,6 +884,23 @@ public class QuestSystem : ModSystem
     // Inventory helpers
     // -----------------------------------------------------------------
 
+    /// <summary>
+    /// True if <paramref name="code"/> matches the requirement's
+    /// <see cref="QuestItemRequirement.Item"/> or any entry in
+    /// <see cref="QuestItemRequirement.Alternates"/>. Each pattern is matched
+    /// via <see cref="WildcardUtil.Match(string, string)"/>, which falls
+    /// through to equality on non-wildcard inputs — so exact codes still
+    /// behave like the legacy single-code matcher.
+    /// </summary>
+    internal static bool RequirementMatches(AssetLocation code, QuestItemRequirement req)
+    {
+        string codeStr = code.ToString();
+        if (WildcardUtil.Match(req.Item, codeStr)) return true;
+        foreach (var alt in req.Alternates)
+            if (WildcardUtil.Match(alt, codeStr)) return true;
+        return false;
+    }
+
     private static int CountInInventory(IServerPlayer player, string itemCode)
     {
         int count = 0;
@@ -906,6 +929,42 @@ public class QuestSystem : ModSystem
             if (remaining <= 0) return false;
             if (slot?.Itemstack?.Collectible?.Code != loc) return true;
 
+            int take = Math.Min(slot.Itemstack.StackSize, remaining);
+            slot.TakeOut(take);
+            slot.MarkDirty();
+            remaining -= take;
+            return remaining > 0;
+        });
+    }
+
+    /// <summary>Sums the stack sizes of every inventory slot whose item code
+    /// matches <paramref name="req"/> (the requirement's <see cref="QuestItemRequirement.Item"/>
+    /// or any of its <see cref="QuestItemRequirement.Alternates"/>). Hotbar + backpacks +
+    /// cursor are all walked.</summary>
+    private static int CountInInventory(IServerPlayer player, QuestItemRequirement req)
+    {
+        int count = 0;
+        player.Entity.WalkInventory(slot =>
+        {
+            if (slot?.Itemstack?.Collectible?.Code is { } code && RequirementMatches(code, req))
+                count += slot.Itemstack.StackSize;
+            return true;
+        });
+        return count;
+    }
+
+    /// <summary>Consumes up to <paramref name="quantity"/> items from the player's
+    /// inventory whose code matches <paramref name="req"/>. Slots are visited in
+    /// the standard walk order (hotbar → backpacks → cursor); whichever matching
+    /// stack the walk reaches first is drawn from first. No preference between
+    /// <see cref="QuestItemRequirement.Item"/> and <see cref="QuestItemRequirement.Alternates"/>.</summary>
+    private static void TakeFromInventory(IServerPlayer player, QuestItemRequirement req, int quantity)
+    {
+        int remaining = quantity;
+        player.Entity.WalkInventory(slot =>
+        {
+            if (remaining <= 0) return false;
+            if (slot?.Itemstack?.Collectible?.Code is not { } code || !RequirementMatches(code, req)) return true;
             int take = Math.Min(slot.Itemstack.StackSize, remaining);
             slot.TakeOut(take);
             slot.MarkDirty();

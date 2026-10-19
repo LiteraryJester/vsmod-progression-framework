@@ -136,9 +136,9 @@ VS uses JSON5 (relaxed JSON) for asset files — trailing commas, unquoted keys,
 
 When designing mod code or understanding existing game behavior, consult:
 
-- **VintagestoryAPI source**: `D:\Development\vs\vsapi\` — canonical interfaces (`ICoreAPI`, `ICoreServerAPI`, `ModSystem`, `Entity`, etc.). For WSL: `/mnt/d/Development/vs/vsapi/`.
-- **VSSurvivalMod source**: `D:\Development\vs\vssurvivalmod\` — base game content implementations (`EntityTrader`, `BehaviorConversable`, `GridRecipe`, etc.). WSL: `/mnt/d/Development/vs/vssurvivalmod/`.
-- **Extracted game assets**: `D:\Development\vs\assets\` — WSL: `/mnt/d/Development/vs/assets/`.
+- **VintagestoryAPI source**: `D:\Development\vs\source\vsapi\` — canonical interfaces (`ICoreAPI`, `ICoreServerAPI`, `ModSystem`, `Entity`, etc.). For WSL: `/mnt/d/Development/vs/source/vsapi/`.
+- **VSSurvivalMod source**: `D:\Development\vs\source\vssurvivalmod\` — base game content implementations (`EntityTrader`, `BehaviorConversable`, `GridRecipe`, etc.). WSL: `/mnt/d/Development/vs/source/vssurvivalmod/`.
+- **Extracted game assets**: `D:\Development\vs\source\assets\` — WSL: `/mnt/d/Development/vs/source/assets/`.
   - `game/` — core game data (blocktypes, entities, shapes, textures, sounds, lang, config)
   - `survival/` — survival mod data (blocktypes, itemtypes, entities, recipes, worldgen, patches)
   - `creative/` — creative mod data
